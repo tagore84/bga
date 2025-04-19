@@ -7,8 +7,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Instalar dependencias
-RUN npm install
-
+RUN npm install && npm install -D vite@^5.0.0 @vitejs/plugin-vue
 # Copiar el resto del código
 COPY . .
 

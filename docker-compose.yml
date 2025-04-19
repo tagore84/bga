@@ -36,4 +36,4 @@ services:
   frontend:
     build: ./frontend
     ports:
-      - '3000:3000'
+      - '3000:5173'  # ✅ mapa el puerto real del contenedor al 3000 del host

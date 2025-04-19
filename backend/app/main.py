@@ -1,14 +1,14 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-import aioredis
+import redis.asyncio as redis
 import uvicorn
 
 app = FastAPI()
-redis = None
+redis_pool = None
 
 @app.on_event("startup")
 async def startup_event():
-    global redis
-    redis = await aioredis.create_redis_pool("redis://redis:6379")
+    global redis_pool
+    redis_pool = redis.Redis(host="redis", port=6379, decode_responses=True)
 
 @app.get("/")
 async def read_root():
@@ -21,7 +21,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
         # Enviar saludo inicial
         await websocket.send_text("Hola Mundo desde WebSocket, cliente %s!" % client_id)
         # Publicar evento en Redis Stream
-        await redis.xadd('bga:events', {b'event': b'hello', b'client': client_id.encode()})
+        await redis_pool.xadd('bga:events', {"event": "hello", "client": client_id})
         while True:
             msg = await websocket.receive_text()
             await websocket.send_text(f"Eco: {msg}")
