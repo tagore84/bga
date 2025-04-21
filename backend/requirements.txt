@@ -1,3 +1,8 @@
 fastapi
 uvicorn[standard]
 redis[async]
+python-jose
+passlib[bcrypt]
+sqlalchemy
+asyncpg
+fastapi[all]

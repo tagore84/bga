@@ -1,15 +1,20 @@
 # BGA – Board Game Arena (Hola Mundo)
 
-Proyecto base para una plataforma de juegos de mesa online con arquitectura moderna.
+Proyecto base para una plataforma de juegos de mesa online por turnos con arquitectura moderna, soporte para jugadores humanos y bots, y comunicación en tiempo real.
 
-## 🧱 Stack Tecnológico
+---
 
-- **Backend**: Python + FastAPI + WebSockets
-- **Frontend**: Vue 3 + Composition API + Konva.js
-- **Comunicación en tiempo real**: WebSockets nativos
-- **Mensajería**: Redis Streams
-- **Base de datos**: PostgreSQL + Redis
-- **Orquestación**: Docker Compose
+## 🧱 Arquitectura actual
+
+| Componente       | Tecnología                          | Descripción |
+|------------------|-------------------------------------|-------------|
+| **Frontend**     | Vue 3 + Vite + Konva.js             | Interfaz gráfica, canvas interactivo, conexión WebSocket |
+| **Backend**      | FastAPI (Python)                    | Lógica de juego, API REST, WebSockets |
+| **Mensajería**   | Redis Streams                       | Coordinación de eventos internos (turnos, notificaciones) |
+| **Base de datos**| PostgreSQL                          | Almacenamiento de usuarios, partidas y estado del juego |
+| **Orquestación** | Docker Compose                      | Contenerización y despliegue local |
+
+---
 
 ## 🚀 Cómo iniciar el proyecto
 
