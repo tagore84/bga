@@ -4,7 +4,9 @@ import redis.asyncio as redis
 import uvicorn
 from app.db.session import engine
 from app.routes.auth import router as auth_router
-from app.db.base.base import Base
+from app.db.base import Base
+from app.routes.tictactoe import router as ttt_router
+
 
 app = FastAPI()
 
@@ -15,8 +17,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# Ahora monta tus routers (auth y tictactoe)
+from app.routes.auth import router as auth_router
+from app.routes.tictactoe import router as ttt_router
 
 app.include_router(auth_router)
+app.include_router(ttt_router)
 
 redis_pool = None
 

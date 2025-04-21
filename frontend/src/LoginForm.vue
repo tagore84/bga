@@ -33,7 +33,6 @@
       if (!loginRes.ok) throw new Error('Error de login')
       const data = await loginRes.json()
       localStorage.setItem('token', data.access_token)
-      //router.push('/games')
       const meRes = await fetch(`http://localhost:8000/me?token=${data.access_token}`)
       const user = await meRes.json()
       emit('login-success', { token: data.access_token, username: user.username })

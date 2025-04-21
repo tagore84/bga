@@ -1,13 +1,15 @@
-// frontend/src/router.js
 import { createRouter, createWebHistory } from 'vue-router'
 import LoginForm from './LoginForm.vue'
 import SignupForm from './SignupForm.vue'
 import GamesList from './GamesList.vue'
+import TicTacToe from './components/TicTacToe.vue'
 
 const routes = [
+  { path: '/', redirect: '/login' },
   { path: '/login', component: LoginForm },
   { path: '/signup', component: SignupForm },
   { path: '/games', component: GamesList, meta: { requiresAuth: true } },
+  { path: '/games/:id', component: TicTacToe, meta: { requiresAuth: true } },
   { path: '/:pathMatch(.*)*', redirect: '/login' }
 ]
 
