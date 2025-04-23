@@ -6,6 +6,11 @@
         <input v-model="password" type="password" placeholder="Contraseña" required />
         <button type="submit">Entrar</button>
       </form>
+      <!-- Enlace para ir a la pantalla de registro -->
+      <p class="register-link">
+        ¿No tienes cuenta?
+        <router-link to="/signup">Regístrate aquí</router-link>
+      </p>
       <p v-if="error" class="error">{{ error }}</p>
     </div>
   </template>

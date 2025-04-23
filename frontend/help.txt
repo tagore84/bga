@@ -1,0 +1,9 @@
+docker-compose up --build
+docker-compose down
+
+docker exec -it bga-db-1 psql -U bga -d bga
+\dt
+DROP TABLE IF EXISTS tictactoe_games;
+\q
+
+docker-compose logs backend --tail=30

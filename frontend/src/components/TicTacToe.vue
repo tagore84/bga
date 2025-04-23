@@ -6,6 +6,7 @@
       <div v-if="status !== 'in_progress'" class="result">
         <p v-if="status === 'draw'">¡Empate!</p>
         <p v-else>¡{{ status === 'X_won' ? 'X' : 'O' }} ha ganado!</p>
+        <button @click="goBack" class="back-button">Volver a selección de juegos</button>
       </div>
       <v-stage :config="{ width: 300, height: 300 }">
         <v-layer>
@@ -31,8 +32,8 @@
             <v-rect
               :x="((idx - 1) % 3) * 100"
               :y="Math.floor((idx - 1) / 3) * 100"
-              width=100
-              height=100
+              width="100"
+              height="100"
               fill="transparent"
               @click="onClick(idx - 1)"
             />
@@ -44,14 +45,16 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+
 
 const API_BASE = window.location.hostname === 'localhost'
   ? 'http://localhost:8000'
   : 'http://backend:8000'
 
 const route = useRoute()
+const router = useRouter()
 const gameId = parseInt(route.params.id)
 
 const board = ref(Array(9).fill(null))
@@ -59,29 +62,47 @@ const currentTurn = ref(null)
 const status = ref('in_progress')
 const loaded = ref(false)
 const error = ref(null)
+const player_o = ref(null)
+const player_x = ref(null)
+const config = ref(null)
 
 async function fetchState() {
-  try {
-    const res = await fetch(`${API_BASE}/tictactoe/${gameId}`)
-    if (!res.ok) throw new Error(`HTTP ${res.status} - ${await res.text()}`)
-    const data = await res.json()
-    board.value = data.board
-    currentTurn.value = data.current_turn
-    status.value = data.status
-    loaded.value = true
-  } catch (e) {
-    error.value = e.message
+  const res = await fetch(`${API_BASE}/tictactoe/${gameId}`, {
+    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+  });
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}`);
   }
+  const data = await res.json();
+  // Actualiza tus reactive state
+  board.value = data.board;
+  currentTurn.value = data.current_turn;
+  status.value = data.status;
+  // si quieres guardar el config completo:
+  config.value = data.config;
+  player_x.value = data.player_x;
+  player_o.value = data.player_o;
+  return data;
 }
 
 async function onClick(pos) {
+  // sólo me dejo clicar si mi turno Y soy ese jugador
+  if (
+    board.value[pos] ||
+    status.value !== 'in_progress' ||
+    (currentTurn.value === 'X' && !isPlayerX.value) ||
+    (currentTurn.value === 'O' && !isPlayerO.value)
+  ) return
   if (board.value[pos] || status.value !== 'in_progress') return
   try {
     const moveRes = await fetch(
       `${API_BASE}/tictactoe/${gameId}/move`,
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
         body: JSON.stringify({ position: pos })
       }
     )
@@ -90,17 +111,76 @@ async function onClick(pos) {
       throw new Error(text || `HTTP ${moveRes.status}`)
     }
     await fetchState()
+    
   } catch (e) {
     error.value = e.message
   }
 }
 
-onMounted(fetchState)
+function goBack() {
+  router.push('/games')
+}
+
+let socket
+
+const token = localStorage.getItem('token')  // tu JWT
+const payload = JSON.parse(atob(token.split('.')[1]))
+const meId = payload.sub   // asume que tu sub es el user.id
+
+const isPlayerX = ref(false)
+const isPlayerO = ref(false)
+
+const meUsername = JSON.parse(atob(localStorage
+  .getItem('token')
+  .split('.')[1]))
+  .sub; // esto es tu username
+
+onMounted(async () => {
+  // 1) Conecta WebSocket…
+  socket = new WebSocket(
+    `ws://${window.location.hostname}:8000/ws/tictactoe/${gameId}`
+  );
+  socket.onmessage = ({ data }) => {
+    try {
+      const msg = JSON.parse(data)
+      // 1) Si viene el tablero, actualízalo
+      if (msg.board) {
+        board.value = JSON.parse(msg.board)
+      }
+      // 2) Estado y turno
+      if (msg.status) {
+        status.value = msg.status
+      }
+      if (msg.by) {
+        currentTurn.value = msg.by
+      }
+    } catch (e) {
+      console.error('Error parseando WS:', e, data)
+    }
+  }
+
+  // 2) Carga el estado inicial y comprueba rol
+  try {
+    const data = await fetchState();
+    // Si tu config usa playerXName:
+    isPlayerX.value = (player_x.value === meUsername);
+    isPlayerO.value = (player_o.value === meUsername);
+    loaded.value = true
+  } catch (err) {
+    console.error('Error cargando partida:', err);
+    error.value = err.message;
+  }
+});
+
+ onBeforeUnmount(() => {
+   socket && socket.close()
+ })
 </script>
 
 <style scoped>
 .loading { font-size: 1.2em; color: #666; }
 .error { color: red; margin: 1em; }
 .result { font-size: 1.5em; margin-bottom: 1em; }
+.back-button { padding: 0.5em 1em; font-size: 1em; margin-top: 0.5em; cursor: pointer; }
 .tic-tac-toe { display: flex; flex-direction: column; align-items: center; margin-top: 2rem; }
 </style>
