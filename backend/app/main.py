@@ -6,10 +6,12 @@ from app.db.session import engine
 from app.routes.auth import router as auth_router
 from app.db.base import Base
 from app.routes.tictactoe import router as ttt_router
-from app.routes.users import router as users_router
+from app.routes.players import router as players_router
+from app.routes.games import router as games_router
 import json
 from app.routes.auth import router as auth_router
 from app.routes.tictactoe import router as ttt_router
+from sqlalchemy.ext.asyncio import AsyncSession
 
 app = FastAPI()
 
@@ -23,20 +25,39 @@ app.add_middleware(
 # Ahora monta tus routers (auth y tictactoe)
 app.include_router(auth_router)
 app.include_router(ttt_router)
-app.include_router(users_router)
+app.include_router(players_router)
+app.include_router(games_router, prefix="/games", tags=["games"])
 
 
 
 @app.on_event("startup")
 async def startup_event():
-    # Inicializa el pool en nuestro módulo core.redis
-    from app.core.redis import redis_pool as pool_ref
-    pool_ref = redis_client.Redis(host="redis", port=6379, decode_responses=True)
     # Asignamos al atributo del módulo
     import app.core.redis as core_redis
-    core_redis.redis_pool = pool_ref
+    
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    # Importar modelos para que estén registrados en metadata
+
+
+    # Inicializar pool de Redis
+    core_redis.redis_pool = redis_client.Redis(host="redis", port=6379, decode_responses=True)
+    # 1) Crear todas las tablas
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    # 2) Sembrar Juegos e IA por defecto usando una sesión
+    from app.core.seed import seed_ai_players
+    from app.core.seed import seed_games
+    async with AsyncSession(engine) as session:
+        await seed_games(session)
+    async with AsyncSession(engine) as session:
+        await seed_ai_players(session)
+
+    # 3) Inicializar Redis pool
+    core_redis.redis_pool = redis_client.Redis(
+        host="redis", port=6379, decode_responses=True
+    )
 
 @app.get("/")
 async def read_root():
@@ -46,6 +67,7 @@ async def read_root():
 async def websocket_endpoint(websocket: WebSocket, client_id: str):
     await websocket.accept()
     try:
+        import app.core.redis as core_redis
         await websocket.send_text(f"Hola Mundo desde WebSocket, cliente {client_id}!")
         await core_redis.redis_pool.xadd('bga:events', {"event": "hello", "client": client_id})
         while True:

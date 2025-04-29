@@ -1,0 +1,25 @@
+docker-compose up --build
+docker-compose down
+
+docker exec -it bga-db-1 psql -U bga -d bga
+\dt
+DROP TABLE IF EXISTS tictactoe_games;
+DROP TABLE IF EXISTS ai_players;
+DROP TABLE IF EXISTS users;
+\q
+
+docker-compose logs backend --tail=30
+
+Las routes se definen en frontend/src/route.js
+
+
+EJECUCIÓN EN MODO DESARROLO:
+brew tap homebrew/services
+brew update
+brew upgrade
+# Iniciar el servicio
+brew services start postgresql
+
+# Crear usuario y base de datos como en Docker
+psql -U postgres -c "CREATE USER bga WITH PASSWORD 'secret';"
+psql -U postgres -c "CREATE DATABASE bga OWNER bga;"

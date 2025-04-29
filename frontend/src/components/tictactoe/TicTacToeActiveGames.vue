@@ -1,6 +1,7 @@
 <template>
   <div class="active-games">
     <button @click="goBack" class="back-btn">← Volver</button>
+    <button @click="createNewGame" class="new-btn">+ Crear partida</button>
     <h2>Partidas Activas</h2>
     <div v-if="loading" class="loading">Cargando partidas...</div>
     <div v-else-if="error" class="error">{{ error }}</div>
@@ -46,6 +47,10 @@ function goBack() {
   router.back()
 }
 
+function createNewGame() {
+  router.push('/tictactoeConfig')
+}
+
 onMounted(fetchActiveGames)
 </script>
 
@@ -88,4 +93,7 @@ button {
 button:hover {
   background: #0056b3;
 }
+  .new-btn {
+    margin-left: 1rem;
+  }
 </style>

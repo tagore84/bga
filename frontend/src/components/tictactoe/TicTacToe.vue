@@ -80,8 +80,8 @@ async function fetchState() {
   status.value = data.status;
   // si quieres guardar el config completo:
   config.value = data.config;
-  player_x.value = data.player_x;
-  player_o.value = data.player_o;
+  player_x.value = data.player_x_name;
+  player_o.value = data.player_o_name;
   return data;
 }
 
@@ -125,7 +125,7 @@ let socket
 
 const token = localStorage.getItem('token')  // tu JWT
 const payload = JSON.parse(atob(token.split('.')[1]))
-const meId = payload.sub   // asume que tu sub es el user.id
+const me = payload.sub   // asume que tu sub es el user.id
 
 const isPlayerX = ref(false)
 const isPlayerO = ref(false)

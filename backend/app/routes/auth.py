@@ -8,13 +8,13 @@ from pydantic import BaseModel
 from datetime import timedelta
 
 from app.db.deps import get_db
-from app.models.user import User
+from app.models.player import Player, PlayerType  # Import the Player model
 from app.utils.auth import (
     hash_password,
     verify_password,
     create_access_token,
     decode_access_token,
-    get_user_by_username,
+    get_player_by_name,
     SECRET_KEY,
     ALGORITHM,
     ACCESS_TOKEN_EXPIRE_MINUTES,
@@ -27,12 +27,11 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
 # Pydantic schemas
 typing_union = None  # placeholder to satisfy code pattern
 class SignupRequest(BaseModel):
-    username: str
-    email: str
+    name: str
     password: str
 
 class LoginRequest(BaseModel):
-    username: str
+    name: str
     password: str
 
 class TokenResponse(BaseModel):
@@ -40,10 +39,10 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
 
 # Dependency: obtener usuario actual
-async def get_current_user(
+async def get_current_player(
     token: str = Depends(oauth2_scheme),
     db: AsyncSession = Depends(get_db)
-) -> User:
+) -> Player:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="No se pudo validar las credenciales",
@@ -51,15 +50,15 @@ async def get_current_user(
     )
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str | None = payload.get("sub")
-        if not username:
+        name: str | None = payload.get("sub")
+        if not name:
             raise credentials_exception
     except JWTError:
         raise credentials_exception
-    user = await get_user_by_username(db, username)
-    if not user:
+    player = await get_player_by_name(db, name)
+    if not player:
         raise credentials_exception
-    return user
+    return player
 
 # Signup endpoint
 @router.post("/signup", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
@@ -67,22 +66,18 @@ async def signup(
     data: SignupRequest,
     db: AsyncSession = Depends(get_db)
 ):
-    # Verificar username único
-    result = await db.execute(select(User).where(User.username == data.username))
+    # Verificar name único
+    result = await db.execute(select(Player).where(Player.name == data.name))
     if result.scalar_one_or_none():
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username already taken")
-    # Verificar email único
-    result = await db.execute(select(User).where(User.email == data.email))
-    if result.scalar_one_or_none():
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Name already taken")
     # Crear usuario
     hashed_pwd = hash_password(data.password)
-    user = User(username=data.username, email=data.email, hashed_password=hashed_pwd)
-    db.add(user)
+    player = Player(name=data.name, hashed_password=hashed_pwd, type=PlayerType.human)
+    db.add(player)
     await db.commit()
-    await db.refresh(user)
+    await db.refresh(player)
     # Crear token
-    access_token = create_access_token(data={"sub": user.username})
+    access_token = create_access_token(data={"sub": player.name})
     return TokenResponse(access_token=access_token)
 
 # Login endpoint
@@ -91,11 +86,11 @@ async def login(
     data: LoginRequest,
     db: AsyncSession = Depends(get_db)
 ):
-    result = await db.execute(select(User).where(User.username == data.username))
-    user = result.scalar_one_or_none()
-    if not user or not verify_password(data.password, user.hashed_password):
+    result = await db.execute(select(Player).where(Player.name == data.name))
+    player = result.scalar_one_or_none()
+    if not player or not verify_password(data.password, player.hashed_password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-    access_token = create_access_token(data={"sub": user.username})
+    access_token = create_access_token(data={"sub": player.name})
     return TokenResponse(access_token=access_token)
 
 # Obtener datos del usuario autenticado
@@ -106,14 +101,14 @@ async def me(
 ):
     try:
         payload = decode_access_token(token)
-        username = payload.get("sub")
-        if not username:
+        name = payload.get("sub")
+        if not name:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
-        result = await db.execute(select(User).where(User.username == username))
-        user = result.scalar_one_or_none()
-        if not user:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-        return {"id": user.id, "username": user.username, "email": user.email}
+        result = await db.execute(select(Player).where(Player.name == name))
+        player = result.scalar_one_or_none()
+        if not player:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Player not found")
+        return {"name": player.name}
     except HTTPException:
         raise
     except Exception:

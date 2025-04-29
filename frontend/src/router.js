@@ -2,9 +2,9 @@ import { createRouter, createWebHistory } from 'vue-router'
 import LoginForm from './LoginForm.vue'
 import SignupForm from './SignupForm.vue'
 import GamesList from './GamesList.vue'
-import TicTacToe from './components/TicTacToe.vue'
-import TicTacToeConfig from './components/TicTacToeConfig.vue'
-import ActiveGames from './components/ActiveGames.vue'
+import TicTacToe from './components/tictactoe/TicTacToe.vue'
+import TicTacToeConfig from './components/tictactoe/TicTacToeConfig.vue'
+import ActiveGames from './components/tictactoe/TicTacToeActiveGames.vue'
 
 const routes = [
   { path: '/', redirect: '/login' },
@@ -14,7 +14,8 @@ const routes = [
   { path: '/games/:id', component: TicTacToe, meta: { requiresAuth: true } },
   { path: '/configure/tictactoe', component: TicTacToeConfig, meta: { requiresAuth: true } },
   { path: '/:pathMatch(.*)*', redirect: '/login' },
-  { path: '/active', component: ActiveGames, meta: { requiresAuth: true } }
+  { path: '/tictactoeActive', component: ActiveGames, meta: { requiresAuth: true } },
+  { path: '/tictactoeConfig', component: TicTacToeConfig, meta: { requiresAuth: true } },
 ]
 
 const router = createRouter({

@@ -1,13 +1,6 @@
-<!-- frontend/src/components/GamesList.vue -->
 <template>
   <div class="games-list">
     <h2>Selecciona un juego</h2>
-
-    <!-- Aquí añadimos el botón para ir a la lista de partidas activas -->
-    <button @click="goToActive" class="active-games-btn">
-      Ver partidas activas
-    </button>
-
     <ul>
       <li v-for="game in games" :key="game.key">
         <button @click="selectGame(game)">{{ game.name }}</button>
@@ -17,22 +10,44 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 
+
+const games = ref([])
 const router = useRouter()
-const games = ref([
-  { key: 'tictactoe', name: 'Tres en Raya', configRoute: '/configure/tictactoe' },
-  // otros juegos…
-])
+
+const API_BASE = window.location.hostname === 'localhost' 
+    ? 'http://localhost:8000' 
+    : 'http://backend:8000'
+
+async function fetchGames() {
+  try {
+    const response = await fetch(`${API_BASE}/games`)
+    if (!response.ok) {
+      throw new Error('Error fetching games')
+    }
+    const data = await response.json()
+    // Support APIs that return either an array directly or an object with a `games` property
+    games.value = data.games ?? data
+  } catch (error) {
+    console.error('Failed to fetch games:', error)
+  }
+}
+
+// Fetch games when the component is mounted
+onMounted(() => {
+  fetchGames()
+})
 
 function selectGame(game) {
-  router.push(game.configRoute)
+  if (game.name === 'tictactoe') {
+    router.push('/tictactoeActive')
+  } else {
+    console.warn(`No config route defined for game ${game.name}`)
+  }
 }
 
-function goToActive() {
-  router.push('/active')
-}
 </script>
 
 <style scoped>

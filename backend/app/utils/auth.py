@@ -6,7 +6,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
-from app.models.user import User
+from app.models.player import Player
 
 # Configuración de hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -27,11 +27,11 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
 
-async def get_user_by_username(db: AsyncSession, username: str) -> User | None:
+async def get_player_by_name(db: AsyncSession, name: str) -> Player | None:
     """
-    Devuelve la instancia User cuyo username coincida, o None si no existe.
+    Devuelve la instancia Player cuyo name coincida, o None si no existe.
     """
-    result = await db.execute(select(User).where(User.username == username))
+    result = await db.execute(select(Player).where(Player.name == name))
     return result.scalar_one_or_none()
 
 
