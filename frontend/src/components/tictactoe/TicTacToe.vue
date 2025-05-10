@@ -1,3 +1,4 @@
+// frontend/src/components/tictactoe/TicTacToe.vue
 <template>
   <div class="tic-tac-toe">
     <div v-if="error" class="error">{{ error }}</div>

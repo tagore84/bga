@@ -26,6 +26,8 @@ from app.models.game import Game
 import logging
 logger = logging.getLogger(__name__)
 
+from app.core.ai_base import get_ai
+
 
 router = APIRouter(prefix="/tictactoe", tags=["tictactoe"])
 
@@ -238,11 +240,7 @@ async def make_move(
     await db.commit()
     await db.refresh(game)
 
-    # Jugada IA si aplica
-    # Jugada IA si aplica
-    # ToDo
-
-    # Publicar en Redis
+    # Publicar movimiento humano
     try:
         await core_redis.redis_pool.xadd(
             f"tictactoe:{game.id}",
@@ -255,7 +253,47 @@ async def make_move(
             }
         )
     except Exception as e:
-        logger.error(f"Failed to publish move event to Redis: {e}")
+        logger.error(f"Failed to publish human move event to Redis: {e}")
+
+    # Jugada IA si aplica
+    if game.status == "in_progress" and (
+        (game.current_turn == "X" and game.config["playerXType"] == "ai") or
+        (game.current_turn == "O" and game.config["playerOType"] == "ai")
+    ):
+        player_id = game.player_x if game.current_turn == "X" else game.player_o
+        player = await db.get(Player, player_id)
+        ai = get_ai(player.name)
+        ai_pos = ai.select_move({
+            "board": game.board,
+            "current_turn": game.current_turn,
+            "config": game.config
+        })
+        # Aplicar jugada IA
+        board = game.board.copy()
+        board[ai_pos] = game.current_turn
+        status_val = _evaluate_board(board)
+        next_turn = "O" if game.current_turn == "X" else "X"
+        game.board = board
+        game.status = status_val
+        game.current_turn = next_turn if status_val == "in_progress" else game.current_turn
+        db.add(game)
+        await db.commit()
+        await db.refresh(game)
+
+        # Publicar evento IA
+        try:
+            await core_redis.redis_pool.xadd(
+                f"tictactoe:{game.id}",
+                {
+                    "type": "move",
+                    "position": str(ai_pos),
+                    "by": game.current_turn,
+                    "board": json.dumps(game.board),
+                    "status": game.status
+                }
+            )
+        except Exception as e:
+            logger.error(f"Failed to publish AI move event to Redis: {e}")
 
     return GameState(
         id=game.id,
