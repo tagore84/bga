@@ -9,24 +9,22 @@ async def seed_games(db: AsyncSession):
     """
     Inserta juegos por defecto si no existen.
     """
-    # Comprueba si ya existe el juego "tictactoe"
-    result = await db.execute(
-        select(Game).where(Game.name == "tictactoe")
-    )
-    existing = result.scalar_one_or_none()
-    if not existing:
-        game = Game(
-            name="tictactoe",
-            description="Juego clásico de tres en raya"
-        )
-        db.add(game)
-        await db.commit()
-        await db.refresh(game)
-        print(f"Juego {game.name} creado.")
-    else:
-        print(f"Juego {existing.name} ya existe. No se ha creado nada nuevo.")
-        return existing
-    return game
+    juegos = [
+        ("tictactoe", "Juego clásico de tres en raya"),
+        ("azul", "Juego de losetas y patrones inspirado en el Palacio Real de Évora")
+    ]
+    for name, description in juegos:
+        result = await db.execute(select(Game).where(Game.name == name))
+        existing = result.scalar_one_or_none()
+        if not existing:
+            game = Game(name=name, description=description)
+            db.add(game)
+            await db.commit()
+            await db.refresh(game)
+            print(f"Juego {game.name} creado.")
+        else:
+            print(f"Juego {existing.name} ya existe. No se ha creado nada nuevo.")
+  
 
 
 
@@ -58,6 +56,11 @@ async def seed_ai_players(db: AsyncSession):
     else:
         print(f"IA {existing.name} ya existe. No se ha creado nada nuevo.")
         # Si la IA ya existe, no hacemos nada
-        return existing
+    
+        # Comprueba si ya existe la IA "RandomAzul"
+    result = await db.execute(
+        select(Player).where(Player.name == "RandomAzul")
+    )
+    existing_azul_ai = result.scalar_one_or_none()
 
     

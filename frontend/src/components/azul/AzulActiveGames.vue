@@ -7,7 +7,7 @@
     <div v-else-if="error" class="error">{{ error }}</div>
     <ul v-else>
       <li v-for="game in games" :key="game.id" class="game-item">
-        <span>Partida #{{ game.id }} - Turno: {{ game.current_turn }}</span>
+        <span>Partida #{{ game.id }} - Turno: {{ game.state.turno_actual }}</span>
         <button @click="joinGame(game.id)">Unirse</button>
       </li>
       <li v-if="games.length === 0">No hay partidas en curso.</li>
@@ -29,7 +29,7 @@ const API_BASE = window.location.hostname === 'localhost'
 
 async function fetchActiveGames() {
   try {
-    const res = await fetch(`${API_BASE}/tictactoe/`)
+    const res = await fetch(`${API_BASE}/azul/`)
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`)
     games.value = await res.json()
   } catch (e) {
@@ -40,7 +40,7 @@ async function fetchActiveGames() {
 }
 
 function joinGame(id) {
-  router.push(`/tictactoe/${id}`)
+  router.push(`/azul/${id}`)
 }
 
 function goBack() {
@@ -48,7 +48,7 @@ function goBack() {
 }
 
 function createNewGame() {
-  router.push('/tictactoeConfig')
+  router.push('/azulConfig')
 }
 
 onMounted(fetchActiveGames)

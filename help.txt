@@ -3,9 +3,10 @@ docker-compose down
 
 docker exec -it bga-db-1 psql -U bga -d bga
 \dt
-DROP TABLE IF EXISTS tictactoe_games;
-DROP TABLE IF EXISTS ai_players;
-DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS tictactoe_games CASCADE;
+DROP TABLE IF EXISTS azul_games CASCADE;
+DROP TABLE IF EXISTS players CASCADE;
+DROP TABLE IF EXISTS games CASCADE;
 \q
 
 docker-compose logs backend --tail=30
@@ -23,3 +24,14 @@ brew services start postgresql
 # Crear usuario y base de datos como en Docker
 psql -U postgres -c "CREATE USER bga WITH PASSWORD 'secret';"
 psql -U postgres -c "CREATE DATABASE bga OWNER bga;"
+
+
+# Ejecución por partes:
+
+docker compose up redis db
+docker compose up --build backend
+docker compose up --build frontend
+(opcional)
+docker compose logs -f backend
+(bajar)
+docker rmi bga-backend_backend

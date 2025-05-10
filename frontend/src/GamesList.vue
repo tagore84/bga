@@ -43,6 +43,8 @@ onMounted(() => {
 function selectGame(game) {
   if (game.name === 'tictactoe') {
     router.push('/tictactoeActive')
+  } else if (game.name === 'azul') {
+    router.push('/azulActive')
   } else {
     console.warn(`No config route defined for game ${game.name}`)
   }

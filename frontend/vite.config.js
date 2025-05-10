@@ -3,6 +3,7 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import path from 'path'
 
+
 export default defineConfig({
   plugins: [vue()],
   resolve: {
@@ -11,7 +12,8 @@ export default defineConfig({
       'vue-konva$': path.resolve(
         __dirname,
         'node_modules/vue-konva/dist/vue-konva.mjs'
-      )
+      ),
+      '@': path.resolve(__dirname, './src')
     }
   }
 })

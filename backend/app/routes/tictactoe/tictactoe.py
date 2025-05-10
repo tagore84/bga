@@ -7,18 +7,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from datetime import datetime
 from app.db.deps import get_db
-from app.models.tictactoe import TicTacToeGame
+from app.models.tictactoe.tictactoe import TicTacToeGame
 from app.routes.auth import get_current_player
 from app.models.player import Player
 
 from app.models.player import PlayerType
-from app.models.tictactoe import TicTacToeGame
+from app.models.tictactoe.tictactoe import TicTacToeGame
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 import json
 
 from app.db.deps import get_db
-from app.models.tictactoe import TicTacToeGame
+from app.models.tictactoe.tictactoe import TicTacToeGame
 from app.models.player import Player
 import app.core.redis as core_redis
 from app.models.game import Game
@@ -32,30 +32,30 @@ from app.core.ai_base import get_ai
 router = APIRouter(prefix="/tictactoe", tags=["tictactoe"])
 
 # Schemas
-class CreateGameRequest(BaseModel):
+class TicTacToeCreateGameRequest(BaseModel):
     game_name:    str
     playerXType:  Literal["human", "ai"]
     playerXId:    int
     playerOType:  Literal["human", "ai"]
     playerOId:    int
 
-class GameState(BaseModel):
+class TicTacToeGameState(BaseModel):
     id:           int
     board:        list[Optional[str]]
     current_turn: str
     status:       str
-    config:       CreateGameRequest
+    config:       TicTacToeCreateGameRequest
     player_x_name: Optional[str] = None
     player_o_name: Optional[str] = None
 
 
-class ParticipantOut(BaseModel):
+class TicTacToeParticipantOut(BaseModel):
     symbol: str                        # "X" u "O"
     player_id: int
     player_type: PlayerType
     name: Optional[str]
 
-class MoveRequest(BaseModel):
+class TicTacToeMoveRequest(BaseModel):
     position: int  # 0..8
 
 # Helper para computar resultado
@@ -73,7 +73,7 @@ def _evaluate_board(board):
     return "in_progress"
 
 # Listar partidas activas
-@router.get("/", response_model=List[GameState])
+@router.get("/", response_model=List[TicTacToeGameState])
 async def list_games(db: AsyncSession = Depends(get_db)):
     q = await db.execute(select(TicTacToeGame).where(TicTacToeGame.status=="in_progress"))
     games = q.scalars().all()
@@ -84,7 +84,7 @@ async def list_games(db: AsyncSession = Depends(get_db)):
         parts = []
         if g.player_x is not None:
             px = await db.get(Player, g.player_x)
-            parts.append(ParticipantOut(
+            parts.append(TicTacToeParticipantOut(
                 symbol='X',
                 player_id=px.id,
                 player_type=px.type,
@@ -92,26 +92,26 @@ async def list_games(db: AsyncSession = Depends(get_db)):
             ))
         if g.player_o is not None:
             po = await db.get(Player, g.player_o)
-            parts.append(ParticipantOut(
+            parts.append(TicTacToeParticipantOut(
                 symbol='O',
                 player_id=po.id,
                 player_type=po.type,
                 name=po.name
             ))
-        out.append(GameState(
+        out.append(TicTacToeGameState(
             id            = g.id,
             board         = g.board,
             current_turn  = g.current_turn,
             status        = g.status,
-            config        = CreateGameRequest(**g.config),
+            config        = TicTacToeCreateGameRequest(**g.config),
             player_x_name  = parts[0].name if len(parts) > 0 else None,
             player_o_name  = parts[1].name if len(parts) > 1 else None
         ))
     return out
 
-@router.post("/", response_model=GameState)
+@router.post("/", response_model=TicTacToeGameState)
 async def create_game(
-    req: CreateGameRequest,
+    req: TicTacToeCreateGameRequest,
     db: AsyncSession = Depends(get_db),
     current_player = Depends(get_current_player),
 ):
@@ -155,19 +155,19 @@ async def create_game(
     x_name = px.name
     po = await db.get(Player, player_o_id)
     o_name = po.name
-    return GameState(
+    return TicTacToeGameState(
         id           = tictactoe_game.id,
         board        = tictactoe_game.board,
         current_turn = tictactoe_game.current_turn,
         status       = tictactoe_game.status,
-        config       = CreateGameRequest(**tictactoe_game.config),
+        config       = TicTacToeCreateGameRequest(**tictactoe_game.config),
         player_x_name   = x_name,
         player_o_name   = o_name
         # ahora podrías también devolver lista de participants si lo quisieras
     )
 
 # Obtener estado de la partida
-@router.get("/{game_id}", response_model=GameState)
+@router.get("/{game_id}", response_model=TicTacToeGameState)
 async def get_game(game_id: int, db: AsyncSession = Depends(get_db)):
     res = await db.execute(select(TicTacToeGame).where(TicTacToeGame.id==game_id))
     g = res.scalar_one_or_none()
@@ -178,7 +178,7 @@ async def get_game(game_id: int, db: AsyncSession = Depends(get_db)):
     player_o = None
     if g.player_x is not None:
         px = await db.get(Player, g.player_x)
-        player_x = ParticipantOut(
+        player_x = TicTacToeParticipantOut(
             symbol='X',
             player_id=px.id,
             player_type=px.type,
@@ -186,18 +186,18 @@ async def get_game(game_id: int, db: AsyncSession = Depends(get_db)):
         )
     if g.player_o is not None:
         po = await db.get(Player, g.player_o)
-        player_o = ParticipantOut(
+        player_o = TicTacToeParticipantOut(
             symbol='O',
             player_id=po.id,
             player_type=po.type,
             name=po.name
         )
-    outputGameState = GameState(
+    outputGameState = TicTacToeGameState(
         id           = g.id,
         board        = g.board,
         current_turn = g.current_turn,
         status       = g.status,
-        config       = CreateGameRequest(**g.config),
+        config       = TicTacToeCreateGameRequest(**g.config),
         player_x_name     = player_x.name,
         player_o_name     = player_o.name
     )
@@ -205,10 +205,10 @@ async def get_game(game_id: int, db: AsyncSession = Depends(get_db)):
     return outputGameState
 
 # Realizar jugada
-@router.post("/{game_id}/move", response_model=GameState)
+@router.post("/{game_id}/move", response_model=TicTacToeGameState)
 async def make_move(
     game_id: int,
-    move: MoveRequest,
+    move: TicTacToeMoveRequest,
     db: AsyncSession = Depends(get_db),
     current_player: Player = Depends(get_current_player)
 ):
@@ -295,12 +295,12 @@ async def make_move(
         except Exception as e:
             logger.error(f"Failed to publish AI move event to Redis: {e}")
 
-    return GameState(
+    return TicTacToeGameState(
         id=game.id,
         board=game.board,
         current_turn=game.current_turn,
         status=game.status,
-        config=CreateGameRequest(**game.config),
+        config=TicTacToeCreateGameRequest(**game.config),
         player_x=game.player_x,
         player_o=game.player_o
     )

@@ -54,7 +54,8 @@ onMounted(async () => {
       headers: { Authorization: `Bearer ${token}` }
     })
     if (!resPlayers.ok) throw new Error('No se pudieron cargar los jugadores')
-    players.value = await resPlayers.json()
+    const rawPlayers = await resPlayers.json()
+    players.value = rawPlayers.filter(p => p.game_id === 1 || p.game_id === null)
   } catch (e) {
     console.error(e)
     error.value = e.message
@@ -93,7 +94,7 @@ async function createGame() {
       throw new Error(text || res.status)
     }
     const data = await res.json()
-    router.push(`/games/${data.id}`)
+    router.push(`/tictactoe/${data.id}`)
   } catch (e) {
     console.error(e)
     error.value = e.message

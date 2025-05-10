@@ -20,4 +20,4 @@ def register_ai(name: str, impl: AIBase):
 def get_ai(name: str) -> AIBase:
     return _strategies[name]
 
-import app.core.ai_tictactoe_random
+import app.core.tictactoe.ai_tictactoe_random
