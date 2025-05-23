@@ -9,7 +9,10 @@
             <h3>{{ jugador.name || ('Jugador ' + id) }} - {{ jugador.puntos }} puntos</h3>
           </div>
           <template v-if="selectedRow !== null">
-            <button @click="confirmMove" :disabled="confirmingMove">OK</button>
+            <button @click="confirmMove" :disabled="confirmingMove" class="confirm-button">
+              <span v-if="confirmingMove">Confirmando...</span>
+              <span v-else>OK</span>
+            </button>
           </template>
           <template v-if="selectedColor !== null">
             <button @click="cancelMove">Cancelar</button>
@@ -32,7 +35,13 @@
         </div>
         <v-stage
           ref="stageRef"
-          :width="Math.max(1000, Math.max(gameState?.expositores?.length * 160 + 100, 610 + ((Object.keys(gameState.jugadores).length > 1 ? 2 : 1) * 360)))"
+          :width="Math.max(
+            1000,
+            Math.max(
+              gameState?.expositores?.length * 160 + 100,
+              610 + ((gameState?.jugadores && Object.keys(gameState.jugadores).length > 1 ? 2 : 1) * 360)
+            )
+          )"
           :height="250 + Math.ceil(Object.keys(gameState.jugadores).length / 2) * 240">
           <v-layer>
             <template v-for="(jugador, jIndex) in Object.values(gameState.jugadores)" :key="'jugador-' + jIndex">
@@ -266,19 +275,44 @@ async function confirmMove() {
 
     await new Promise(resolve => setTimeout(resolve, 600))
 
-    // Añadir fichas al patrón y sobrantes al suelo NO FUNCIONA
+    // Añadir fichas al patrón y sobrantes al suelo (visualización local)
     const jugador = Object.values(gameState.value.jugadores).find(j => j.name === me)
     if (jugador) {
       const filaActual = jugador.patrones[selectedRow.value - 1]
       const huecosDisponibles = filaActual.length - filaActual.filter(c => c !== null && c !== '').length
       const fichasAColocar = Math.min(huecosDisponibles, coords.length)
-      for (let i = 0; i < fichasAColocar; i++) {
-        filaActual.push(color)
+      let colocadas = 0
+      for (let i = 0; i < filaActual.length && colocadas < fichasAColocar; i++) {
+        if (filaActual[i] === null || filaActual[i] === '') {
+          filaActual[i] = color
+          colocadas++
+        }
       }
       const sobrantes = coords.length - fichasAColocar
       for (let i = 0; i < sobrantes; i++) {
         jugador.suelo.push(color)
       }
+    }
+
+    // Confirmar movimiento en el backend
+    const res = await fetch(`${API_BASE}/azul/${gameId}/move`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      },
+      body: JSON.stringify({
+        factory: selectedFactory.value,
+        color: selectedColor.value,
+        row: selectedRow.value
+      })
+    })
+    if (!res.ok) {
+      console.error('Error al confirmar movimiento en backend:', res.status)
+    }
+    else {
+      const updatedState = await fetchState()
+      gameState.value = updatedState
     }
 
     animatedPieces.value = []
@@ -367,8 +401,10 @@ onMounted(async () => {
 
   socket.onmessage = (event) => {
     const data = JSON.parse(event.data)
-    ensurePlayerNames(data)
-    gameState.value = data
+    if (data.type === 'update' && data.state) {
+      ensurePlayerNames(data.state)
+      gameState.value = data.state
+    }
   }
 
   socket.onerror = (e) => {
@@ -530,3 +566,8 @@ gap: 0.5em;
 margin-top: 1em;
 }
 </style>
+
+.confirm-button[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

@@ -111,3 +111,6 @@ bga/
 Este proyecto está licenciado bajo **CC BY-NC 4.0**.  
 Puedes usarlo, modificarlo y compartirlo **sin fines comerciales** y **dando atribución**.  
 [Ver licencia completa](https://creativecommons.org/licenses/by-nc/4.0/)
+
+## DeepWiki
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/tagore84/bga)
