@@ -5,6 +5,8 @@ services:
     build: ./backend
     ports:
       - '8000:8000'
+    volumes:
+      - ./backend:/app
     depends_on:
       redis:
         condition: service_started
@@ -42,6 +44,9 @@ services:
     build: ./frontend
     ports:
       - '3000:5173'  # ✅ mapa el puerto real del contenedor al 3000 del host
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
   
 volumes:
   db-data:

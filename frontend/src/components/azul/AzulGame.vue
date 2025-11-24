@@ -1,12 +1,21 @@
 <template>
   <div class="azul-game">
       <h2>Partida Azul #{{ gameId }}</h2>
+      <div class="user-info">
+        <p><strong>Usuario:</strong> {{ me }}</p>
+        <p><strong>Turno actual:</strong> <span :class="{ 'active-turn': true }">{{ gameState?.turno_actual }}</span></p>
+      </div>
       <div v-if="!loaded">Cargando...</div>
       <div v-else-if="error">Error: {{ error }}</div>
       <div v-else-if="gameState">
         <div v-if="gameState.jugadores">
-          <div v-for="(jugador, id) in gameState.jugadores" :key="id" class="jugador">
-            <h3>{{ jugador.name || ('Jugador ' + id) }} - {{ jugador.puntos }} puntos</h3>
+          <div v-for="(jugador, id) in gameState.jugadores" :key="id" class="jugador-info" :class="{ 'is-active': gameState.turno_actual === jugador.name }">
+            <h3>
+              {{ jugador.name || ('Jugador ' + id) }} 
+              <span v-if="jugador.name === me">(TÚ)</span>
+              - {{ jugador.puntos }} puntos
+              <span v-if="gameState.turno_actual === jugador.name">⭐ TURNO</span>
+            </h3>
           </div>
           <template v-if="selectedRow !== null">
             <button @click="confirmMove" :disabled="confirmingMove" class="confirm-button">
@@ -20,18 +29,6 @@
         </div>
         <div v-else>
           <p>No hay datos de jugadores.</p>
-        </div>
-        <div class="centro" v-if="gameState.centro">
-          <h3>Centro</h3>
-          <div class="centro-fichas">
-            <div
-              v-for="(ficha, i) in gameState.centro"
-              :key="'centro-' + i"
-              class="ficha"
-            >
-              <img :src="fichaImages[ficha]" alt="ficha" class="ficha-img" />
-            </div>
-          </div>
         </div>
         <v-stage
           ref="stageRef"
@@ -57,8 +54,8 @@
               <template v-if="jugador.name === me">
                 <template v-for="row in 5" :key="'fila-' + row">
                   <v-rect
-                    :x="623 - 29*row + 29*5"
-                    :y="264 + jIndex * 240 + (row-1) * 29"
+                    :x="(610 + (jIndex % 2) * 360) + 13 - 29*row + 29*5"
+                    :y="(250 + Math.floor(jIndex / 2) * 240) + 14 + (row-1) * 29"
                     :width="29*row - 2"
                     :height="27"
                     :fill="getRowFillState(row)"
@@ -70,15 +67,50 @@
                 </template>
               </template>
               <template v-for="(fila, y) in jugador.patrones" :key="'patron-fila-' + y + '-j' + jIndex">
-                <v-rect
-                  v-for="(casilla, i) in fila"
-                  :key="'patron-casilla-' + y + '-' + i + '-j' + jIndex"
-                  :x="610 - i * 30"
-                  :y="250 + jIndex * 240 + y * 30"
+                <template v-for="(casilla, i) in fila" :key="'patron-casilla-' + y + '-' + i + '-j' + jIndex">
+                  <template v-if="casilla !== null && casilla !== ''">
+                    <v-image
+                      :x="(610 + (jIndex % 2) * 360) + 129 - 29 * (y + 1) + 29 * (i + 1 + (y + 1 - fila.length))"
+                      :y="(250 + Math.floor(jIndex / 2) * 240) + 14 + y * 29"
+                      :width="28"
+                      :height="28"
+                      :image="getColorImg(casilla)"
+                    />
+                  </template>
+                  <template v-else>
+                    <v-rect
+                      :x="(610 + (jIndex % 2) * 360) + 13 - 29 * (y + 1) + 29 * (i + 1) + 116"
+                      :y="(250 + Math.floor(jIndex / 2) * 240) + 14 + y * 29"
+                      :width="28"
+                      :height="28"
+                      :fill="'white'"
+                      stroke="black"
+                    />
+                  </template>
+                </template>
+              </template>
+              <!-- Renderizar muro (pared) -->
+              <template v-for="(fila, r) in jugador.pared" :key="'pared-fila-' + r + '-j' + jIndex">
+                 <template v-for="(casilla, c) in fila" :key="'pared-casilla-' + r + '-' + c + '-j' + jIndex">
+                    <v-image v-if="casilla"
+                      :x="(610 + (jIndex % 2) * 360) + 175 + c * 30"
+                      :y="(250 + Math.floor(jIndex / 2) * 240) + 14 + r * 29"
+                      :width="28"
+                      :height="28"
+                      :image="getColorImg(casilla)"
+                    />
+                 </template>
+              </template>
+              <!-- Renderizar fichas del suelo -->
+              <template v-if="jugador.suelo">
+                <v-image
+                  v-for="(casilla, i) in jugador.suelo"
+                  :key="'suelo-' + i + '-j' + jIndex"
+                  :x="(610 + (jIndex % 2) * 360) + 13 + i * 30"
+                  :y="(250 + Math.floor(jIndex / 2) * 240) + 175"
                   :width="28"
                   :height="28"
-                  :fill="getColor(casilla)"
-                  stroke="black"
+                  :image="getColorImg(casilla)"
                 />
               </template>
             </template>
@@ -104,17 +136,17 @@
                 :strokeWidth="isSelected(index, color) ? 3 : 0"
               />
             </template>
-
-            <template v-for="(color, i) in gameState?.centro || []" :key="'centro-' + i">
-              <v-circle
-                :x="100 + i * 35"
-                :y="300"
-                :radius="15"
-                :fill="getColor(color)"
+            <template v-for="(color, i) in gameState?.centro" :key="'centro-' + i">
+              <v-image
+                :x="32 + (i % 2) * 50"
+                :y="230 + Math.floor(i / 2) * 50"
+                :width="30"
+                :height="30"
+                :image="getColorImg(color)"
                 :onclick="() => handleCenterClick(color)"
                 :opacity="isSelectable('centro', color) ? 1 : 0.4"
-                :stroke="isSelected(index, color) ? 'black' : null"
-                :strokeWidth="isSelected(index, color) ? 3 : 0"
+                :stroke="isSelected('centro', color) ? 'red' : null"
+                :strokeWidth="isSelected('centro', color) ? 3 : 0"
               />
             </template>
           </v-layer>
@@ -132,13 +164,22 @@
           </v-layer>
         </v-stage>
       </div>
+      
+      <div v-if="gameState?.log && gameState.log.length > 0" class="game-log" ref="logContainer">
+        <h3>Registro de Movimientos</h3>
+        <ul>
+          <li v-for="(entry, index) in gameState.log" :key="index">{{ entry }}</li>
+        </ul>
+      </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 const stageRef = ref(null)
 const confirmingMove = ref(false)
+const logContainer = ref(null)
+
 import { useRoute, useRouter } from 'vue-router'
 import boardImg from '@/assets/azul/board.png'
 import factoryImg from '@/assets/azul/factory_0.png'
@@ -159,14 +200,22 @@ const [blackImage] = useImage(blackImg)
 const [orangeImage] = useImage(orangeImg)
 
 const fichaImages = {
-  blue: blueImage,
-  yellow: yellowImage,
-  red: redImage,
-  black: blackImage,
-  orange: orangeImage,
+  0: blueImage,
+  1: yellowImage,
+  2: redImage,
+  3: blackImage,
+  4: orangeImage,
 }
 
 const gameState = ref(null)
+
+watch(() => gameState.value?.log?.length, () => {
+  nextTick(() => {
+    if (logContainer.value) {
+      logContainer.value.scrollTop = logContainer.value.scrollHeight
+    }
+  })
+})
 
 const selectedFactory = ref(null)
 const selectedColor = ref(null)
@@ -245,8 +294,13 @@ async function confirmMove() {
       }
     }
 
-    const targetX = 623 - 29 * selectedRow.value + 29 * 5 + 15
-    const targetY = 264 + 0 * 240 + (selectedRow.value - 1) * 29 + 15
+    const jugadoresArray = Object.values(gameState.value.jugadores)
+    const jIndex = jugadoresArray.findIndex(j => j.name === me)
+    const offsetX = (jIndex % 2) * 360
+    const offsetY = Math.floor(jIndex / 2) * 240
+
+    const targetX = 623 + offsetX - 29 * selectedRow.value + 29 * 5 + 15
+    const targetY = 264 + offsetY + (selectedRow.value - 1) * 29 + 15
 
     animatedPieces.value = coords.map((c) => ({ x: c.x, y: c.y, color }))
 
@@ -311,8 +365,16 @@ async function confirmMove() {
       console.error('Error al confirmar movimiento en backend:', res.status)
     }
     else {
-      const updatedState = await fetchState()
+    const data = await res.json()
+    if (data.ok && data.state) {
+      const updatedState = data.state
+      ensurePlayerNames(updatedState)
       gameState.value = updatedState
+      console.log('Movimiento confirmado y estado actualizado:', updatedState)
+    } else {
+       // Fallback or error handling if needed
+       console.error('Respuesta de movimiento inesperada:', data)
+    }
     }
 
     animatedPieces.value = []
@@ -331,22 +393,15 @@ function cancelMove() {
   selectedRow.value = null
 }
 function getColorImg(color) {
-  const colorImg = {
-    blue: blueImage,
-    yellow: yellowImage,
-    red: redImage,
-    black: blackImage,
-    orange: orangeImage
-  }[color]
-  return colorImg.value
+  return fichaImages[color]?.value || null
 }
 function getColor(color) {
   return {
-    blue: 'blue',
-    yellow: 'yellow',
-    red: 'red',
-    black: 'black',
-    orange: 'orange'
+    0: 'blue',
+    1: 'yellow',
+    2: 'red',
+    3: 'black',
+    4: 'orange',
   }[color] || 'gray'
 }
 function isSelected(factoryIndex, color) {
@@ -382,28 +437,39 @@ const token = localStorage.getItem('token')  // tu JWT
 const payload = JSON.parse(atob(token.split('.')[1]))
 const me = payload.sub   // asume que tu sub es el user.id
 
+function ensurePlayerNames(state) {
+  if (state && state.jugadores && typeof state.jugadores === 'object') {
+    for (const [id, jugador] of Object.entries(state.jugadores)) {
+      if (!('name' in jugador)) {
+        jugador.name = null;
+      }
+      if (state.turno_actual === id) {
+        state.turno_actual = jugador.name ?? id;
+      }
+    }
+  }
+}
+
 
 onMounted(async () => {
   socket = new WebSocket(`ws://${window.location.hostname}:8000/ws/azul/${gameId}`)
 
-  function ensurePlayerNames(state) {
-    if (state && state.jugadores && typeof state.jugadores === 'object') {
-      for (const [id, jugador] of Object.entries(state.jugadores)) {
-        if (!('name' in jugador)) {
-          jugador.name = null;
-        }
-        if (state.turno_actual === id) {
-          state.turno_actual = jugador.name ?? id;
-        }
-      }
-    }
-  }
+
 
   socket.onmessage = (event) => {
     const data = JSON.parse(event.data)
     if (data.type === 'update' && data.state) {
-      ensurePlayerNames(data.state)
-      gameState.value = data.state
+      let newState = data.state
+      if (typeof newState === 'string') {
+        try {
+          newState = JSON.parse(newState)
+        } catch (e) {
+          console.error('Error parsing state from WS:', e)
+          return
+        }
+      }
+      ensurePlayerNames(newState)
+      gameState.value = newState
     }
   }
 
@@ -415,7 +481,7 @@ onMounted(async () => {
   try {
     const data = await fetchState()
     ensurePlayerNames(data)
-    gameState.value = data  // <--- AÑADE ESTA LÍNEA
+    gameState.value = data
     loaded.value = true
   } catch (err) {
     console.error('Error cargando partida:', err)
@@ -497,7 +563,7 @@ gap: 4.5%; /* espacio entre filas, puede afinarse */
 
 .patron-fila {
 display: flex;
-justify-content: flex-end;
+flex-direction: flex-end;
 gap: 3%; /* espacio entre losetas dentro de cada fila */
 }
 .patron-casilla {
@@ -559,15 +625,56 @@ margin: 2em 0;
 }
 
 .centro-fichas {
-display: flex;
-flex-wrap: wrap;
-justify-content: center;
-gap: 0.5em;
-margin-top: 1em;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5em;
+  margin-top: 1em;
 }
-</style>
+
+.user-info {
+  background: #eef;
+  padding: 10px;
+  border-radius: 5px;
+  margin-bottom: 10px;
+}
+
+.active-turn {
+  color: #d32f2f;
+  font-weight: bold;
+}
+
+.jugador-info {
+  padding: 5px;
+  border-radius: 4px;
+}
+
+.jugador-info.is-active {
+  background-color: #fff3e0;
+  border: 1px solid #ff9800;
+}
+
+.game-log {
+  margin-top: 20px;
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  max-height: 200px;
+  overflow-y: auto;
+  background: #fff;
+}
+.game-log ul {
+  list-style-type: none;
+  padding: 0;
+  margin: 0;
+}
+.game-log li {
+  padding: 5px 0;
+  border-bottom: 1px solid #eee;
+}
 
 .confirm-button[disabled] {
   opacity: 0.5;
   cursor: not-allowed;
 }
+</style>

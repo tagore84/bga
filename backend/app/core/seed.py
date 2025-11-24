@@ -61,6 +61,23 @@ async def seed_ai_players(db: AsyncSession):
     result = await db.execute(
         select(Player).where(Player.name == "RandomAzul")
     )
+    game_result_azul = await db.execute(
+        select(Game).where(Game.name == "azul")
+    )
+    game_existing_azul = game_result_azul.scalar_one_or_none()
     existing_azul_ai = result.scalar_one_or_none()
+    if not existing_azul_ai:
+        ia = Player(
+            name="RandomAzul",
+            description="Elige movimientos válidos al azar",
+            game_id=game_existing_azul.id,
+            hashed_password=None,
+            type = PlayerType.ai,
+        )
+        db.add(ia)
+        await db.commit()
+    else:
+        print(f"IA {existing_azul_ai.name} ya existe. No se ha creado nada nuevo.")
+        # Si la IA ya existe, no hacemos nada
 
     

@@ -11,7 +11,7 @@ def init_game_state(jugadores_data: List[dict]) -> AzulGameState:
     # Inicializar jugadores
     jugadores = {}
     for jugador in jugadores_data:
-        jugadores[str(jugador["id"])] = JugadorAzul(id=str(jugador["id"]), name=jugador["name"])
+        jugadores[str(jugador["id"])] = JugadorAzul(id=str(jugador["id"]), name=jugador["name"], type=jugador["type"])
     # Elegir jugador inicial
     jugador_inicial = str(jugadores_data[0]["id"])
     jugadores[jugador_inicial].tiene_ficha_inicial = True

@@ -40,6 +40,10 @@ async def crear_partida_azul(req: CreateGameRequest, db: AsyncSession = Depends(
     db.add(partida)
     await db.commit()
     await db.refresh(partida)
+    
+    # Trigger AI turns if necessary
+    await process_ai_turns(base_game.id, partida, estado, db)
+    
     return {"game_id": base_game.id, "azul_id": partida.id, "state": partida.state}
 
 
@@ -111,4 +115,40 @@ async def make_move(game_id: int, move: AzulMove, db: AsyncSession = Depends(get
 
     await publish_azul_update(game_id, partida.state)
 
+    await process_ai_turns(game_id, partida, state, db)
     return {"ok": True, "state": partida.state}
+
+async def process_ai_turns(game_id: int, partida: AzulGame, state: AzulGameState, db: AsyncSession):
+    # Jugada IA si aplica (bucle IA)
+    while True:
+        siguiente_jugador = state.turno_actual
+        jugador_info = state.jugadores.get(siguiente_jugador)
+        if not jugador_info or jugador_info.type != "ai":
+            break
+
+        from app.core.ai_base import get_ai  # Asegúrate de tener este helper
+        ai = get_ai(jugador_info.name)
+        ai_move = ai.select_move(state)
+
+        # Aplicar jugada IA
+        aplicar_movimiento(state, siguiente_jugador, ai_move)
+        print(f"IA {jugador_info.name} ha jugado: {ai_move}")
+        # Avanzar turno nuevamente si quedan movimientos
+        jugadores_ids = list(state.jugadores.keys())
+        if jugadores_ids:
+            idx = jugadores_ids.index(siguiente_jugador)
+            for offset in range(1, len(jugadores_ids) + 1):
+                siguiente = jugadores_ids[(idx + offset) % len(jugadores_ids)]
+                if True:  # reemplazar con lógica real de si el jugador puede mover
+                    state.turno_actual = siguiente
+                    break
+
+        # Guardar nuevo estado después del movimiento IA
+        partida.state = json.loads(state.json())
+        db.add(partida)
+        print(f"Estado actualizado después del movimiento IA: {partida.state}")
+        await db.commit()
+        await db.refresh(partida)
+
+        await publish_azul_update(game_id, partida.state)
+    print(f"Estado final después de todas las jugadas: {partida.state}")

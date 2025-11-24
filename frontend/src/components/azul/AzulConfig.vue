@@ -44,7 +44,7 @@ onMounted(async () => {
     })
     if (!resPlayers.ok) throw new Error('No se pudieron cargar los jugadores')
     const rawPlayers = await resPlayers.json()
-    players.value = rawPlayers.filter(p => p.game_id === 1 || p.game_id === null)
+    players.value = rawPlayers.filter(p => p.game_id === 2 || p.game_id === null)
   } catch (e) {
     console.error(e)
     error.value = e.message
