@@ -2,7 +2,10 @@ fastapi
 uvicorn[standard]
 redis[async]
 python-jose
-passlib[bcrypt]
+passlib
+bcrypt==3.2.2
 sqlalchemy
 asyncpg
 fastapi[all]
+gym
+torch

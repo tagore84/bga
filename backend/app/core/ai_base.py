@@ -22,3 +22,4 @@ def get_ai(name: str) -> AIBase:
 
 import app.core.tictactoe.ai_tictactoe_random
 import app.core.azul.ai_azul_random
+import app.core.azul.ai_zero

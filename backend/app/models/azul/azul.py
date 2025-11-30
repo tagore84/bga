@@ -18,9 +18,9 @@ from enum import IntEnum
 class Color(IntEnum):
     BLUE = 0
     YELLOW = 1
-    RED = 2
+    ORANGE = 2
     BLACK = 3
-    ORANGE = 4
+    RED = 4
 
 
 class Fase(str, Enum):
@@ -52,6 +52,7 @@ class AzulGameState(BaseModel):
     ronda: int = 1
     terminado: bool = False
     log: List[str] = Field(default_factory=list)
+    first_player_marker_in_center: bool = True
 
 
 class AzulGameOutput(BaseModel):
@@ -246,6 +247,9 @@ def prepare_next_round(state: AzulGameState):
     else:
         # Fallback if logic failed (shouldn't happen if someone took from center)
         pass
+    
+    # Reset first player marker for new round
+    state.first_player_marker_in_center = True
 
 def wall_tiling_phase(state: AzulGameState):
     state.fase = Fase.ALICATADO
@@ -269,9 +273,9 @@ def aplicar_movimiento(state: AzulGameState, jugador_id: str, move: AzulMove):
     if move.factory == "centro":
         fichas_tomadas = [f for f in state.centro if f == color]
         state.centro = [f for f in state.centro if f != color]
-        if not jugador.tiene_ficha_inicial:
+        if state.first_player_marker_in_center:
+            state.first_player_marker_in_center = False
             jugador.tiene_ficha_inicial = True
-            jugador.suelo.append(Color.BLUE)  # puedes usar un color especial si tienes uno para "jugador inicial"
     else:
         factory_index = int(move.factory)
         expositor = state.expositores[factory_index]

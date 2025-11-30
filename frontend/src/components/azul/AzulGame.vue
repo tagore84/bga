@@ -1,6 +1,9 @@
 <template>
   <div class="azul-game">
-      <h2>Partida Azul #{{ gameId }}</h2>
+      <div class="header-container">
+        <h2>Partida Azul #{{ gameId }}</h2>
+        <button @click="goHome" class="back-button">Volver al Inicio</button>
+      </div>
       <div class="user-info">
         <p><strong>Usuario:</strong> {{ me }}</p>
         <p><strong>Turno actual:</strong> <span :class="{ 'active-turn': true }">{{ gameState?.turno_actual }}</span></p>
@@ -65,6 +68,18 @@
                     :onclick="() => handleRowClick(row)"
                   />
                 </template>
+                <!-- Floor option (row 0) -->
+                <v-rect
+                  :x="(610 + (jIndex % 2) * 360) + 13"
+                  :y="(250 + Math.floor(jIndex / 2) * 240) + 175"
+                  :width="210"
+                  :height="28"
+                  :fill="getRowFillState(0)"
+                  :opacity="getRowOpacity(0)"
+                  :stroke="selectedRow === 0 ? 'red' : isSelectableRow(0) ? 'gray' : 'black'"
+                  :strokeWidth="selectedRow === 0 ? 3 : isSelectableRow(0) ? 2 : 1"
+                  :onclick="() => handleRowClick(0)"
+                />
               </template>
               <template v-for="(fila, y) in jugador.patrones" :key="'patron-fila-' + y + '-j' + jIndex">
                 <template v-for="(casilla, i) in fila" :key="'patron-casilla-' + y + '-' + i + '-j' + jIndex">
@@ -75,6 +90,7 @@
                       :width="28"
                       :height="28"
                       :image="getColorImg(casilla)"
+                      :onclick="() => handleRowClick(y + 1)"
                     />
                   </template>
                   <template v-else>
@@ -85,6 +101,7 @@
                       :height="28"
                       :fill="'white'"
                       stroke="black"
+                      :onclick="() => handleRowClick(y + 1)"
                     />
                   </template>
                 </template>
@@ -92,8 +109,8 @@
               <!-- Renderizar muro (pared) -->
               <template v-for="(fila, r) in jugador.pared" :key="'pared-fila-' + r + '-j' + jIndex">
                  <template v-for="(casilla, c) in fila" :key="'pared-casilla-' + r + '-' + c + '-j' + jIndex">
-                    <v-image v-if="casilla"
-                      :x="(610 + (jIndex % 2) * 360) + 175 + c * 30"
+                    <v-image v-if="casilla !== null"
+                      :x="(610 + (jIndex % 2) * 360) + 175 + c * 29"
                       :y="(250 + Math.floor(jIndex / 2) * 240) + 14 + r * 29"
                       :width="28"
                       :height="28"
@@ -113,6 +130,15 @@
                   :image="getColorImg(casilla)"
                 />
               </template>
+              <!-- First player tile on floor -->
+              <v-image
+                v-if="jugador.tiene_ficha_inicial && !gameState?.first_player_marker_in_center"
+                :x="(610 + (jIndex % 2) * 360) + 13 + (jugador.suelo?.length || 0) * 30"
+                :y="(250 + Math.floor(jIndex / 2) * 240) + 175"
+                :width="30"
+                :height="30"
+                :image="firstPlayerTileImage"
+              />
             </template>
             <template v-for="(expositor, index) in gameState?.expositores || []" :key="index">
               <v-image
@@ -149,6 +175,15 @@
                 :strokeWidth="isSelected('centro', color) ? 3 : 0"
               />
             </template>
+            <!-- First player tile in center -->
+            <v-image
+              v-if="gameState?.first_player_marker_in_center"
+              :x="50"
+              :y="200"
+              :width="40"
+              :height="40"
+              :image="firstPlayerTileImage"
+            />
           </v-layer>
           <v-layer>
             <v-image
@@ -171,11 +206,52 @@
           <li v-for="(entry, index) in gameState.log" :key="index">{{ entry }}</li>
         </ul>
       </div>
+      <div class="debug-section" style="margin-top: 20px; border-top: 1px solid #ccc; padding-top: 10px;">
+        <button @click="debugGame">🔍 Debug Estado</button>
+      </div>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
+// ... existing imports ...
+
+function debugGame() {
+  console.group("--- DEBUG GAME STATE ---")
+  console.log("GameState:", JSON.parse(JSON.stringify(gameState.value)))
+  console.log("Me:", me)
+  console.log("Selected Color:", selectedColor.value, typeof selectedColor.value)
+  console.log("Selected Factory:", selectedFactory.value)
+  console.log("Selected Row:", selectedRow.value)
+
+  const jugador = Object.values(gameState.value?.jugadores || {}).find(j => j.name === me || j.id === me)
+  if (jugador) {
+    console.log("Jugador encontrado:", JSON.parse(JSON.stringify(jugador)))
+    console.group("Row Eligibility Check")
+    for (let r = 0; r <= 5; r++) {
+      const eligible = isSelectableRow(r)
+      console.log(`Row ${r}: ${eligible ? 'VALID' : 'INVALID'}`)
+      if (r > 0) {
+         const rowIndex = r - 1
+         const patron = jugador.patrones[rowIndex]
+         const filledCount = patron ? patron.filter(c => c !== null && c !== '' && c !== -1).length : 0
+         const existingColor = patron ? patron.find(c => c !== null && c !== '' && c !== -1) : undefined
+         const colorVal = parseInt(selectedColor.value)
+         const wallCol = selectedColor.value !== null ? getWallColumn(r, colorVal) : 'N/A'
+         const wallCell = (jugador.pared && jugador.pared[rowIndex] && selectedColor.value !== null) ? jugador.pared[rowIndex][wallCol] : 'N/A'
+         
+         console.log(`  - Patron:`, patron)
+         console.log(`  - Filled: ${filledCount}/${r}`)
+         console.log(`  - Existing Color: ${existingColor} vs Selected: ${colorVal}`)
+         console.log(`  - Wall Col: ${wallCol}, Cell Value: ${wallCell}`)
+      }
+    }
+    console.groupEnd()
+  } else {
+    console.error("Jugador NOT found for 'me':", me)
+  }
+  console.groupEnd()
+}
 const stageRef = ref(null)
 const confirmingMove = ref(false)
 const logContainer = ref(null)
@@ -188,6 +264,7 @@ import yellowImg from '@/assets/azul/yellow.png'
 import redImg from '@/assets/azul/red.png'
 import blackImg from '@/assets/azul/black.png'
 import orangeImg from '@/assets/azul/orange.png'
+import firstPlayerTileImg from '@/assets/azul/first_player_tile.png'
 import { useImage } from 'vue-konva'
 
 const [boardImage] = useImage(boardImg)
@@ -198,13 +275,14 @@ const [yellowImage] = useImage(yellowImg)
 const [redImage] = useImage(redImg)
 const [blackImage] = useImage(blackImg)
 const [orangeImage] = useImage(orangeImg)
+const [firstPlayerTileImage] = useImage(firstPlayerTileImg)
 
 const fichaImages = {
   0: blueImage,
   1: yellowImage,
-  2: redImage,
+  2: orangeImage,
   3: blackImage,
-  4: orangeImage,
+  4: redImage,
 }
 
 const gameState = ref(null)
@@ -224,7 +302,8 @@ const selectedRow = ref(null)
 const animatedPieces = ref([])
 
 function isPlayerTurn() {
-  return gameState.value?.turno_actual === me
+  // console.log('isPlayerTurn check. Me:', me, 'Turno:', gameState.value?.turno_actual)
+  return gameState.value?.turno_actual === me || gameState.value?.jugadores?.[gameState.value?.turno_actual]?.id === me
 }
 
 function isSelectable(factoryIndex, color) {
@@ -259,10 +338,57 @@ function getRowOpacity(row) {
   return 0;
 }
 
+// Helper function to get wall column for a color in a row (Azul pattern)
+function getWallColumn(row, color) {
+  // Row 0: B Y R K O (0 1 2 3 4)
+  // Row 1: O B Y R K (4 0 1 2 3)
+  // Row 2: K O B Y R (3 4 0 1 2)
+  // Row 3: R K O B Y (2 3 4 0 1)
+  // Row 4: Y R K O B (1 2 3 4 0)
+  return (parseInt(color) + row - 1) % 5
+}
+
 function isSelectableRow(row) {
-  // ejemplo simple: hay algo seleccionado y cabría en esa fila
-  const selected = selectedColor.value;
-  return selected != null; // extender lógica según reglas reales
+  if (selectedColor.value === null) return false
+  
+  // Row 0 is the floor - always valid
+  if (row === 0) return true
+  
+  const jugador = Object.values(gameState.value?.jugadores || {}).find(j => j.name === me || j.id === me)
+  if (!jugador) {
+      console.log('Player not found for me:', me)
+      return false
+  }
+  
+  const rowIndex = row - 1 // Convert to 0-based
+  const patron = jugador.patrones[rowIndex]
+  
+  // Check if row is full (count non-null/non-empty items)
+  const filledCount = patron ? patron.filter(c => c !== null && c !== '' && c !== -1).length : 0
+  if (filledCount >= row) {
+      console.log(`Row ${row} full. Filled: ${filledCount}`)
+      return false
+  }
+  
+  // Check if row has tiles of a different color
+  const colorVal = parseInt(selectedColor.value)
+  const existingColor = patron ? patron.find(c => c !== null && c !== '' && c !== -1) : undefined
+  if (existingColor !== undefined && existingColor !== colorVal) {
+      console.log(`Row ${row} mismatch color. Existing: ${existingColor}, Selected: ${colorVal}`)
+      return false
+  }
+  
+  // Check if wall already has this color in this row
+  const wallCol = getWallColumn(row, colorVal)
+  if (jugador.pared && jugador.pared[rowIndex]) {
+      const cell = jugador.pared[rowIndex][wallCol]
+      if (cell !== null && cell !== undefined) {
+          console.log(`Row ${row} wall occupied at col ${wallCol}. Cell: ${cell}`)
+          return false
+      }
+  }
+  
+  return true
 }
 
 function handleRowClick(row) {
@@ -299,8 +425,17 @@ async function confirmMove() {
     const offsetX = (jIndex % 2) * 360
     const offsetY = Math.floor(jIndex / 2) * 240
 
-    const targetX = 623 + offsetX - 29 * selectedRow.value + 29 * 5 + 15
-    const targetY = 264 + offsetY + (selectedRow.value - 1) * 29 + 15
+    // Calculate target position based on whether it's floor or pattern row
+    let targetX, targetY
+    if (selectedRow.value === 0) {
+      // Floor position
+      targetX = 610 + offsetX + 13 + 15
+      targetY = 250 + offsetY + 175 + 15
+    } else {
+      // Pattern row position
+      targetX = 623 + offsetX - 29 * selectedRow.value + 29 * 5 + 15
+      targetY = 264 + offsetY + (selectedRow.value - 1) * 29 + 15
+    }
 
     animatedPieces.value = coords.map((c) => ({ x: c.x, y: c.y, color }))
 
@@ -331,7 +466,8 @@ async function confirmMove() {
 
     // Añadir fichas al patrón y sobrantes al suelo (visualización local)
     const jugador = Object.values(gameState.value.jugadores).find(j => j.name === me)
-    if (jugador) {
+    if (jugador && selectedRow.value > 0) {
+      // Only update pattern lines if not going to floor
       const filaActual = jugador.patrones[selectedRow.value - 1]
       const huecosDisponibles = filaActual.length - filaActual.filter(c => c !== null && c !== '').length
       const fichasAColocar = Math.min(huecosDisponibles, coords.length)
@@ -344,6 +480,11 @@ async function confirmMove() {
       }
       const sobrantes = coords.length - fichasAColocar
       for (let i = 0; i < sobrantes; i++) {
+        jugador.suelo.push(color)
+      }
+    } else if (jugador && selectedRow.value === 0) {
+      // All tiles go to floor
+      for (let i = 0; i < coords.length; i++) {
         jugador.suelo.push(color)
       }
     }
@@ -392,6 +533,10 @@ function cancelMove() {
   selectedColor.value = null
   selectedRow.value = null
 }
+
+function goHome() {
+  router.push('/games')
+}
 function getColorImg(color) {
   return fichaImages[color]?.value || null
 }
@@ -399,9 +544,9 @@ function getColor(color) {
   return {
     0: 'blue',
     1: 'yellow',
-    2: 'red',
+    2: 'orange',
     3: 'black',
-    4: 'orange',
+    4: 'red',
   }[color] || 'gray'
 }
 function isSelected(factoryIndex, color) {
@@ -413,6 +558,7 @@ const API_BASE = window.location.hostname === 'localhost'
 : 'http://backend:8000'
 
 const route = useRoute()
+const router = useRouter()
 const gameId = parseInt(route.params.id)
 
 
@@ -499,6 +645,12 @@ if (socket) socket.close()
 .error { color: red; margin: 1em; }
 .result { font-size: 1.5em; margin-bottom: 1em; }
 .back-button { padding: 0.5em 1em; font-size: 1em; margin-top: 0.5em; cursor: pointer; }
+.header-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1em;
+}
 .tic-tac-toe { display: flex; flex-direction: column; align-items: center; margin-top: 2rem; }
 
 .jugador {

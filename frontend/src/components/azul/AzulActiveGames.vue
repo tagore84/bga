@@ -8,7 +8,10 @@
     <ul v-else>
       <li v-for="game in games" :key="game.id" class="game-item">
         <span>Partida #{{ game.id }} - Turno: {{ game.state.turno_actual }}</span>
-        <button @click="joinGame(game.id)">Unirse</button>
+        <div class="button-group">
+          <button @click="joinGame(game.id)" class="join-btn">Unirse</button>
+          <button @click="deleteGame(game.id)" class="delete-btn">🗑️ Eliminar</button>
+        </div>
       </li>
       <li v-if="games.length === 0">No hay partidas en curso.</li>
     </ul>
@@ -50,6 +53,31 @@ function goBack() {
 function createNewGame() {
   router.push('/azulConfig')
 }
+
+async function deleteGame(id) {
+  if (!confirm(`¿Estás seguro de que quieres eliminar la partida #${id}?`)) {
+    return
+  }
+  
+  try {
+    const res = await fetch(`${API_BASE}/azul/${id}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      }
+    })
+    
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}: ${await res.text()}`)
+    }
+    
+    // Refresh the list after deletion
+    await fetchActiveGames()
+  } catch (e) {
+    alert(`Error al eliminar la partida: ${e.message}`)
+  }
+}
+
 
 onMounted(fetchActiveGames)
 </script>
@@ -93,7 +121,24 @@ button {
 button:hover {
   background: #0056b3;
 }
-  .new-btn {
-    margin-left: 1rem;
-  }
+.new-btn {
+  margin-left: 1rem;
+}
+.button-group {
+  display: flex;
+  gap: 0.5rem;
+}
+.delete-btn {
+  background: #dc3545;
+}
+.delete-btn:hover {
+  background: #c82333;
+}
+.join-btn {
+  background: #28a745;
+}
+.join-btn:hover {
+  background: #218838;
+}
+
 </style>

@@ -2,8 +2,9 @@
   <div class="games-list">
     <h2>Selecciona un juego</h2>
     <ul>
-      <li v-for="game in games" :key="game.key">
-        <button @click="selectGame(game)">{{ game.name }}</button>
+      <li v-for="game in games" :key="game.key" class="game-item">
+        <button @click="selectGame(game)" class="select-btn">{{ game.name }}</button>
+        <button @click="deleteGame(game.id)" class="delete-btn" v-if="game.name.startsWith('test_')">🗑️</button>
       </li>
     </ul>
   </div>
@@ -50,6 +51,31 @@ function selectGame(game) {
   }
 }
 
+async function deleteGame(gameId) {
+  if (!confirm('¿Estás seguro de que quieres eliminar este juego de prueba?')) {
+    return
+  }
+  
+  try {
+    const res = await fetch(`${API_BASE}/games/${gameId}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      }
+    })
+    
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`)
+    }
+    
+    // Refresh the list
+    await fetchGames()
+  } catch (e) {
+    alert(`Error al eliminar el juego: ${e.message}`)
+  }
+}
+
+
 </script>
 
 <style scoped>
@@ -64,5 +90,33 @@ function selectGame(game) {
 }
 .active-games-btn:hover {
   background: #218838;
+}
+
+.game-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.select-btn {
+  flex: 1;
+  padding: 10px;
+  font-size: 16px;
+}
+
+.delete-btn {
+  background: #dc3545;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.delete-btn:hover {
+  background: #c82333;
 }
 </style>

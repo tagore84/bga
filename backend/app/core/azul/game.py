@@ -12,9 +12,8 @@ def init_game_state(jugadores_data: List[dict]) -> AzulGameState:
     jugadores = {}
     for jugador in jugadores_data:
         jugadores[str(jugador["id"])] = JugadorAzul(id=str(jugador["id"]), name=jugador["name"], type=jugador["type"])
-    # Elegir jugador inicial
+    # Elegir jugador inicial (will get marker when someone takes from center)
     jugador_inicial = str(jugadores_data[0]["id"])
-    jugadores[jugador_inicial].tiene_ficha_inicial = True
 
     # Determinar número de expositores
     num_jugadores = len(jugadores_data)

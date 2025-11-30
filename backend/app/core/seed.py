@@ -81,3 +81,27 @@ async def seed_ai_players(db: AsyncSession):
         # Si la IA ya existe, no hacemos nada
 
     
+    # Azul Zero Players
+    azul_zero_players = [
+        ("AzulZero_RandomPlus", "IA aleatoria mejorada (evita penalizaciones obvias)"),
+        ("AzulZero_MCTS", "IA basada en AlphaZero (MCTS + Red Neuronal)"),
+        ("AzulZero_Heuristic", "IA heurística (reglas manuales)")
+    ]
+
+    for ai_name, ai_desc in azul_zero_players:
+        result = await db.execute(select(Player).where(Player.name == ai_name))
+        existing_ai = result.scalar_one_or_none()
+        
+        if not existing_ai:
+            ia = Player(
+                name=ai_name,
+                description=ai_desc,
+                game_id=game_existing_azul.id,
+                hashed_password=None,
+                type=PlayerType.ai,
+            )
+            db.add(ia)
+            await db.commit()
+            print(f"IA {ai_name} creada.")
+        else:
+            print(f"IA {existing_ai.name} ya existe. No se ha creado nada nuevo.")
