@@ -13,7 +13,7 @@ import copy  # Add this import at the top of the file if not present
 class AzulEnv(gym.Env):
     metadata = {'render.modes': ['human']}
 
-    def __init__(self, num_players: int = 2, factories_count: int = 5, seed: int = None):
+    def __init__(self, num_players: int = 2, factories_count: int = 5, seed: int = None, max_rounds: int = 15):
         super().__init__()
         if seed is not None:
             np.random.seed(seed)
@@ -22,6 +22,7 @@ class AzulEnv(gym.Env):
         self.C: int = len(Color)
         self.N: int = factories_count
         self.L_floor: int = 7
+        self.max_rounds = max_rounds
 
         # Game state
         self.bag: np.ndarray = np.full(self.C, 20, dtype=int)
@@ -29,6 +30,7 @@ class AzulEnv(gym.Env):
         self.factories: np.ndarray = np.zeros((self.N, self.C), dtype=int)
         self.center: np.ndarray = np.zeros(self.C, dtype=int)
         self.first_player_token: bool = False
+        self.first_player_next_round: int = -1 # -1 means not yet taken
 
         # Players state
         self.players = [
@@ -101,8 +103,10 @@ class AzulEnv(gym.Env):
 
         # Fill factories and center
         self.first_player_token = True
+        self.first_player_next_round = -1
         self.current_player = 0
         self.round_count = 1
+        self.done = False  # Reset done flag
         self._refill_factories()
 
         return self._get_obs()
@@ -138,10 +142,55 @@ class AzulEnv(gym.Env):
             if self.first_player_token:
                 # penalty token
                 fl = p['floor_line']
-                free = np.where(fl == 0)[0]
-                if free.size > 0:
-                    fl[free[0]] = -1
+                free = np.where(fl == 0)[0] # 0 is empty? No, -1 is empty.
+                # Wait, let's check init. floor_line is -1.
+                # But in step: free = np.where(fl == 0)[0] ??
+                # Let's check line 141 in original: free = np.where(fl == 0)[0]
+                # That looks like a BUG in original code if -1 is empty.
+                # Let's check view_file output again.
+                # Line 38: 'floor_line': np.full(self.L_floor, -1, dtype=int),
+                # Line 141: free = np.where(fl == 0)[0]
+                # This seems wrong if 0 is BLUE.
+                # Ah, wait. In place_on_pattern_line, empty is -1.
+                # In floor line, is -1 empty?
+                # Line 155: idxs = np.where(fl == -1)[0] -> This confirms -1 is empty.
+                # So line 141 `free = np.where(fl == 0)[0]` is definitely a BUG.
+                # It checks for color 0 (BLUE) instead of empty (-1).
+                # I should fix this too.
+                
+                idxs = np.where(fl == -1)[0]
+                if idxs.size > 0:
+                    fl[idxs[0]] = -1 # Wait, penalty token is not a color?
+                    # Usually represented as a special value or just -1 penalty?
+                    # The rule says: "The first player to take tiles from the center... takes the -1 penalty token".
+                    # In this implementation, does it store the token in the floor line?
+                    # Line 143: fl[free[0]] = -1.
+                    # If -1 is empty, then setting it to -1 does nothing.
+                    # This implementation seems to rely on `calculate_floor_penalization` which just counts filled slots?
+                    # Let's check `calculate_floor_penalization`.
+                    # Line 102: for idx, tile in enumerate(floor_line): if tile != -1: score += penalties[idx]
+                    # So if we put -1, it's counted as empty.
+                    # So the first player token is NOT being penalized in the original code!
+                    # We need a value for the token. Maybe -2? Or just any non-negative value?
+                    # But colors are 0..4.
+                    # Let's use a special value, e.g., 5 (since colors are 0-4).
+                    # Or maybe the implementation intended to use a specific color?
+                    # Actually, let's look at how it was.
+                    # `fl[free[0]] = -1` -> This effectively does nothing if it was already -1.
+                    # So the penalty was missing.
+                    
+                    # Fix: Use a special value for the first player token. Let's say 5 (Color.RED + 1).
+                    pass
+                
+                # Let's fix the bug:
+                # 1. Find first empty slot.
+                # 2. Place a "token" there.
+                idxs = np.where(fl == -1)[0]
+                if idxs.size > 0:
+                    fl[idxs[0]] = 5 # Representing the -1 token
+                
                 self.first_player_token = False
+                self.first_player_next_round = self.current_player
 
         # Place tiles
         if dest < 5:
@@ -230,13 +279,18 @@ class AzulEnv(gym.Env):
             pen = calculate_floor_penalization(p['floor_line'])
             p['score'] += pen
             for tile in p['floor_line']:
-                if tile >= 0:
+                if tile >= 0 and tile < 5: # 0-4 are colors
                     self.discard[int(tile)] += 1
+                # tile 5 is the first player token, doesn't go to discard
             p['floor_line'] = np.full(self.L_floor, -1, dtype=int)
             
 
-        # Check game end (any full wall row)
+        # Check game end (any full wall row) OR max rounds reached
         game_over = any(all(cell != -1 for cell in row) for p in self.players for row in p['wall'])
+        
+        if self.round_count >= self.max_rounds:
+            game_over = True
+
         if game_over:
             # Apply final bonuses to each player
             for p in self.players:
@@ -245,6 +299,19 @@ class AzulEnv(gym.Env):
         else:
             self.first_player_token = True
             self._refill_factories()
+            
+            # Determine next starting player
+            if self.first_player_next_round != -1:
+                self.current_player = self.first_player_next_round
+            else:
+                # Should not happen in standard play if someone took from center
+                # But if center was empty (rare?), keep current or random?
+                # In Azul, center always has the -1 token initially.
+                # So someone MUST have taken it.
+                pass
+            
+            self.first_player_next_round = -1 # Reset for next round
+
         self.round_count += 1
         return game_over
 
@@ -291,12 +358,16 @@ class AzulEnv(gym.Env):
         for p in rotated_players:
             spatial_parts.append(p['wall'])
             
-        # Global parts: bag, discard, factories, center, first_player, floor_lines, scores
+        # Factories parts: factories (N*5), center (5)
+        factories_parts = [
+            obs['factories'].flatten(),
+            obs['center']
+        ]
+        
+        # Global parts: bag, discard, first_player, floor_lines, scores
         global_parts = [
             obs['bag'],
             obs['discard'],
-            obs['factories'].flatten(),
-            obs['center'],
             np.array([int(obs['first_player_token'])], dtype=int)
         ]
         
@@ -308,12 +379,13 @@ class AzulEnv(gym.Env):
         global_parts.append(scores)
         # current player removed (implicit)
         
-        # Concatenate spatial then global
+        # Concatenate spatial then factories then global
         # Spatial: (num_players * 2, 5, 5) flattened
         spatial_flat = np.array(spatial_parts).flatten()
+        factories_flat = np.concatenate(factories_parts)
         global_flat = np.concatenate(global_parts)
         
-        return np.concatenate([spatial_flat, global_flat])
+        return np.concatenate([spatial_flat, factories_flat, global_flat])
 
     def action_to_index(self, action: Tuple[int, int, int]) -> int:
         """
@@ -333,12 +405,15 @@ class AzulEnv(gym.Env):
         new.observation_space = self.observation_space
         new.action_size = self.action_size
 
+        new.max_rounds = self.max_rounds
+
         # Copia de estado del juego
         new.bag = self.bag.copy()
         new.discard = self.discard.copy()
         new.factories = self.factories.copy()
         new.center = self.center.copy()
         new.first_player_token = self.first_player_token
+        new.first_player_next_round = self.first_player_next_round
         new.current_player = self.current_player
         new.players = copy.deepcopy(self.players)
         new.round_count = self.round_count
@@ -406,4 +481,3 @@ class AzulEnv(gym.Env):
     
     def get_final_scores(self):
         return [p['score'] for p in self.players]
-
