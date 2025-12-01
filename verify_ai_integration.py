@@ -44,7 +44,7 @@ def test_random_plus():
 
 def test_mcts():
     print("\nTesting AzulZeroMCTS...")
-    model_path = "backend/modelos/best.pt"
+    model_path = "backend/app/core/azul/zero/models/best.pt"
     if not os.path.exists(model_path):
         print(f"Model not found at {model_path}, skipping MCTS test")
         return

@@ -111,8 +111,8 @@ class AzulZeroHeuristic(AIBase):
         return AzulMove(factory=factory_val, color=Color(color), row=row_val)
 
 # Register players
-# Assuming running from backend root
-model_path = "modelos/best.pt"
+# Use path relative to this file
+model_path = os.path.join(os.path.dirname(__file__), "zero/models/best.pt")
 if os.path.exists(model_path):
     register_ai("AzulZero_MCTS", AzulZeroMCTS(model_path))
 else:

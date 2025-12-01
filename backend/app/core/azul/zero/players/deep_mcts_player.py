@@ -11,7 +11,7 @@ from ..mcts.mcts import MCTS
 from .base_player import BasePlayer
 
 class DeepMCTSPlayer(BasePlayer):
-    def __init__(self, model_path, device='cpu', mcts_iters=200, cpuct=1.0):
+    def __init__(self, model_path, device='cpu', mcts_iters=250, cpuct=1.0):
         super().__init__()
         self.device = torch.device(device)
         # Load checkpoint and extract model state
