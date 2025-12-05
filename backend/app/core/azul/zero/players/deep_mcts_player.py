@@ -11,7 +11,7 @@ from ..mcts.mcts import MCTS
 from .base_player import BasePlayer
 
 class DeepMCTSPlayer(BasePlayer):
-    def __init__(self, model_path, device='cpu', mcts_iters=250, cpuct=1.0):
+    def __init__(self, model_path, device='cpu', mcts_iters=200, cpuct=1.0):
         super().__init__()
         self.device = torch.device(device)
         # Load checkpoint and extract model state
@@ -82,6 +82,37 @@ class DeepMCTSPlayer(BasePlayer):
         self._obs_to_env(obs)
         # Run MCTS from this state
         self.mcts.run(self.prototype_env)
+        
+        # --- LOGGING STATISTICS ---
+        # Get statistics from the root node
+        root = self.mcts.root
+        children = root.children
+        
+        # Sort actions by visit count (descending)
+        sorted_items = sorted(children.items(), key=lambda item: item[1].visits, reverse=True)
+        
+        print(f"\n[DeepMCTSPlayer] Decision Analysis (Sims: {self.mcts.simulations})")
+        print(f"{'Action':<30} | {'Visits':<8} | {'Q-Val':<8} | {'Prior':<8} | {'Score':<8}")
+        print("-" * 75)
+        
+        for i, (action, node) in enumerate(sorted_items[:5]): # Show top 5
+            # Action is (source_idx, color, dest)
+            # Create a more readable string
+            source, color, dest = action
+            src_str = f"Fact_{source}" if source < 5 else "Center"
+            dest_str = f"Line_{dest+1}" if dest < 5 else "Floor"
+            action_str = f"{src_str}, Color_{color}, to {dest_str}"
+            
+            # UCB Score (approximate since we don't pass cpuct here exactly as in select, but close enough for display)
+            # Usually we want the value used for selection. 
+            # Note: MCTS.select uses ucb_score method.
+            ucb = node.ucb_score(self.mcts.cpuct)
+            
+            print(f"{action_str:<30} | {node.visits:<8} | {node.value:.4f}   | {node.prior:.4f}   | {ucb:.4f}")
+            
+        print("-" * 75)
+        # --------------------------
+
         # Select and return an action tuple
         action = self.mcts.select_action()
         return action

@@ -1,60 +1,64 @@
-# src/players/heuristic_player.py
+# src/players/expert_player.py
 import random
 import torch
 import numpy as np
+from .base_player import BasePlayer
 
-class HeuristicPlayer:
+class ExpertPlayer(BasePlayer):
     def __init__(self):
-        self.device = torch.device("cpu")
+        super().__init__()
 
     def predict(self, obs):
         current_player = obs["current_player"]
         pattern_lines = np.array(obs["players"][current_player]["pattern_lines_padded"])
         wall = np.array(obs["players"][current_player]["wall"])
         valid_actions = get_valid_actions_from_obs(obs)
-
-        best_score = float("-inf")
-        best_action = None
-
+        
+        complete_row_action = None
+        one_shot_row_action = None
+        some_no_foor_action = None
+        best_floor_action = None
+        floor_crystals = 1000
         for action in valid_actions:
             flat_action = action.item()
             factory, color, row = decode_action(flat_action)
-
-            score = 0
-
-            if row < 5:
-                pline = pattern_lines[row]
-                if color in wall[row]:
-                    continue  # ilegal, pero por si acaso
-                filled = (pline != -1).sum()
-                total = len(pline)
-                if color in pline or np.all(pline == -1):
-                    score += 10  # colocar color compatible o en vacío
-                    score += 5 * filled  # más llena la línea = mejor
-                    if filled == total - 1:
-                        score += 20  # ¡completa!
-            else:
-                score -= 15  # penaliza ir al suelo
-
-            # pequeñas bonificaciones por usar fábricas y no centro
+            has_color = False
+            empty_slots = 0
+            number_crystals_of_color = 0
             if factory < 5:
-                score += 1
+                number_crystals_of_color = obs["factories"][factory][color]
+            else:
+                number_crystals_of_color = obs["center"][color]
+            empty_slots = row + 1
+            if row < 5:
+                for i in range(len(pattern_lines[row])):
+                    if pattern_lines[row][i] > -1:
+                        empty_slots -= 1
+                        if pattern_lines[row][i] == color:
+                            has_color = True
+                if row < 5 and has_color and empty_slots == number_crystals_of_color:
+                    complete_row_action = flat_action
+                    break
+                if row < 5 and not has_color and empty_slots == number_crystals_of_color:
+                    one_shot_row_action = flat_action
+                if row < 5 and empty_slots >= number_crystals_of_color:
+                    some_no_foor_action = flat_action
+            else:
+                if floor_crystals > number_crystals_of_color:
+                    floor_crystals = number_crystals_of_color
+                    best_floor_action = flat_action
 
-            if score > best_score:
-                best_score = score
-                best_action = flat_action
 
-        if best_action is not None:
-            return best_action
+
+        if complete_row_action is not None:
+            return complete_row_action
+        elif one_shot_row_action is not None:
+            return one_shot_row_action
+        elif some_no_foor_action is not None:
+            return some_no_foor_action
+        elif best_floor_action is not None:
+            return best_floor_action
         else:
-            N = len(obs["factories"])
-            C = 5  # number of colors
-            for source_idx in range(N + 1):
-                source = obs["factories"][source_idx] if source_idx < N else obs["center"]
-                for color in range(C):
-                    if source[color] > 0:
-                        return source_idx * (C * 6) + color * 6 + 5
-            # Si incluso eso falla, lanzamos excepción
             print("No valid actions and center is empty.")
             print("Observation keys:", list(obs.keys()))
             raise ValueError("No fallback action possible in heuristic player")
