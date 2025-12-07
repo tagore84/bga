@@ -8,7 +8,7 @@ import numpy as np
 from backend.app.core.azul.zero.players.deep_mcts_player import DeepMCTSPlayer
 
 class AIAzulDeepMCTS(AIBase):
-    def __init__(self, model_path: str, device: str = 'cpu', mcts_iters: int = 200, cpuct: float = 1.0):
+    def __init__(self, model_path: str, device: str = 'mps', mcts_iters: int = 200, cpuct: float = 0):
         self.player = DeepMCTSPlayer(model_path, device=device, mcts_iters=mcts_iters, cpuct=cpuct)
         print(f"AIAzulDeepMCTS loaded model from {model_path}")
 

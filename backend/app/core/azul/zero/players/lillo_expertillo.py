@@ -1,139 +1,101 @@
-# src/players/lillo_expertillo.py
+# src/players/heuristic_player.py
+import random
+import torch
+import numpy as np
 
-from enum import Enum
-from .base_player import BasePlayer
-
-C = 5  # número de colores
-D = 6  # destinos: 5 filas de patrón (0–4) + 1 línea de suelo (5)
-
-class OptionType(Enum):
-    TWO_STEPS_COMPLETE = 0
-    ONE_STEP_COMPLETE  = 1
-    INCOMPLETE         = 2
-    ALL_TO_FLOOR       = 3
-
-class Option:
-    """
-    Representa una posible acción: tomar `num` fichas de color `color`
-    de la fuente `src` y colocarlas en la fila `row` (0–4 patrón, 5 suelo).
-    """
-    def __init__(self, src, color, row, num):
-        self.src    = src
-        self.color  = color
-        self.row    = row
-        self.num    = num
-        # se fijarán en evaluate()
-        self.type     = None
-        self.slotNum  = 0
-        self.floorNum = 0
-
-    def evaluate(self, obs):
-        """
-        Asigna self.type, self.slotNum y self.floorNum según el estado obs.
-        """
-        current = obs["current_player"]
-        # obtener la fila de destino
-        if self.row < C:
-            slot_row = obs["players"][current]["pattern_lines"][self.row]
-        else:
-            slot_row = obs["players"][current]["floor_line"]
-
-        empty_slots  = sum(1 for t in slot_row if t == 0)
-        filled_slots = len(slot_row) - empty_slots
-
-        complete            = (empty_slots <= self.num)
-        two_steps_complete  = complete and (filled_slots > 0)
-        all_to_floor        = (empty_slots == 0)
-
-        if self.row < C:
-            if all_to_floor:
-                self.type = OptionType.ALL_TO_FLOOR
-            elif two_steps_complete:
-                self.type = OptionType.TWO_STEPS_COMPLETE
-            elif complete:
-                self.type = OptionType.ONE_STEP_COMPLETE
-            else:
-                self.type = OptionType.INCOMPLETE
-
-            self.slotNum  = min(empty_slots, self.num)
-            self.floorNum = max(0, self.num - empty_slots)
-        else:
-            # siempre legal mandar todo a suelo
-            self.type     = OptionType.ALL_TO_FLOOR
-            self.slotNum  = 0
-            self.floorNum = self.num
-
-    def __lt__(self, other):
-        # Primero por tipo (ordinal menor = mejor)
-        if self.type != other.type:
-            return self.type.value < other.type.value
-
-        # Dentro del mismo tipo:
-        if self.type in (
-            OptionType.TWO_STEPS_COMPLETE,
-            OptionType.ONE_STEP_COMPLETE,
-            OptionType.INCOMPLETE
-        ):
-            # queremos slotNum mayor primero
-            return self.slotNum  > other.slotNum
-        else:
-            # ALL_TO_FLOOR: queremos num mayor primero
-            return self.num       < other.num
-
-    def __eq__(self, other):
-        return (
-            self.type     == other.type
-            and self.slotNum  == other.slotNum
-            and self.floorNum == other.floorNum
-            and self.src      == other.src
-            and self.color    == other.color
-            and self.row      == other.row
-            and self.num      == other.num
-        )
-
-class LilloExpertillo(BasePlayer):
-    """
-    Traducción de LilloExpertillo (Java) a Python.
-    Juega escogiendo la opción evaluada como “mejor” según OptionType y recuentos.
-    """
+class HeuristicPlayer:
     def __init__(self):
-        super().__init__()
-        print("Estoy roto, hay que arreglarme")
+        self.device = torch.device("cpu")
 
     def predict(self, obs):
-        """
-        Construye todas las opciones legales, las evalúa, ordena
-        y devuelve el índice entero de la mejor.
-        """
-        num_factories = len(obs["factories"])
-        num_sources   = num_factories + 1  # fábricas + centro
-        options       = []
+        current_player = obs["current_player"]
+        pattern_lines = np.array(obs["players"][current_player]["pattern_lines_padded"])
+        wall = np.array(obs["players"][current_player]["wall"])
+        valid_actions = get_valid_actions_from_obs(obs)
 
-        # generar todas las opciones
-        for src in range(num_sources):
-            tile_counts = (
-                obs["factories"][src]
-                if src < num_factories
-                else obs["center"]
-            )
-            for color in range(C):
-                count = tile_counts[color]
-                if count == 0:
-                    continue
-                for row in range(D):
-                    opt = Option(src, color, row, count)
-                    opt.evaluate(obs)
-                    # si type no es None, es legal
-                    if opt.type is not None:
-                        options.append(opt)
+        best_score = float("-inf")
+        best_action = None
 
-        if not options:
-            raise RuntimeError("No hay opciones legales (LilloExpertillo)")
+        for action in valid_actions:
+            flat_action = action.item()
+            factory, color, row = decode_action(flat_action)
 
-        # ordenar y quedarnos con la mejor (0 tras sort)
-        options.sort()
-        best = options[0]
+            score = 0
 
-        # codificar acción en un índice entero
-        index = best.src * (C * D) + best.color * D + best.row
-        return index
+            if row < 5:
+                pline = pattern_lines[row]
+                if color in wall[row]:
+                    continue  # ilegal, pero por si acaso
+                filled = (pline != -1).sum()
+                total = len(pline)
+                if color in pline or np.all(pline == -1):
+                    score += 10  # colocar color compatible o en vacío
+                    score += 5 * filled  # más llena la línea = mejor
+                    if filled == total - 1:
+                        score += 20  # ¡completa!
+            else:
+                score -= 15  # penaliza ir al suelo
+
+            # pequeñas bonificaciones por usar fábricas y no centro
+            if factory < 5:
+                score += 1
+
+            if score > best_score:
+                best_score = score
+                best_action = flat_action
+
+        if best_action is not None:
+            return best_action
+        else:
+            N = len(obs["factories"])
+            C = 5  # number of colors
+            for source_idx in range(N + 1):
+                source = obs["factories"][source_idx] if source_idx < N else obs["center"]
+                for color in range(C):
+                    if source[color] > 0:
+                        return source_idx * (C * 6) + color * 6 + 5
+            # Si incluso eso falla, lanzamos excepción
+            print("No valid actions and center is empty.")
+            print("Observation keys:", list(obs.keys()))
+            raise ValueError("No fallback action possible in heuristic player")
+
+def decode_action(index):
+    """
+    Decode an action index into (factory/source index, color, destination row).
+    Actions are encoded as: index = source_idx * (C * 6) + color * 6 + dest.
+    C is number of colors (5), dest count is 6 (pattern lines 0–4 and floor as 5).
+    """
+    C = 5  # number of colors
+    D = 6  # number of possible destinations (5 pattern rows + floor)
+    factory = index // (C * D)
+    remainder = index % (C * D)
+    color = remainder // D
+    row = remainder % D
+    return factory, color, row
+
+def is_row_closable(row):
+    return (row != -1).sum().item() == len(row) - 1
+
+def is_row_fillable(row):
+    return (row != -1).any().item()
+
+def get_valid_actions_from_obs(obs):
+    C = 5  # number of colors
+    N = len(obs["factories"])  # number of factories
+    valid_actions = []
+    current_player = obs["current_player"]
+    wall = obs["players"][current_player]["wall"]
+
+    for source_idx in range(N + 1):
+        source = obs["factories"][source_idx] if source_idx < N else obs["center"]
+        for color in range(C):
+            if source[color] == 0:
+                continue
+            for dest in range(6):
+                if dest < 5:
+                    wall_row = wall[dest]
+                    if color in wall_row:
+                        continue
+                index = source_idx * (C * 6) + color * 6 + dest
+                valid_actions.append(index)
+    return torch.tensor(valid_actions)

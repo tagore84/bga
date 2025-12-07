@@ -5,8 +5,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
-from ..azul.env import AzulEnv
-from ..mcts.mcts import MCTS
+from app.core.azul.zero.azul.env import AzulEnv
+from app.core.azul.zero.mcts.mcts import MCTS
 import copy
 
 class ResBlock(nn.Module):
