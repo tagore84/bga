@@ -5,8 +5,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
-from app.core.azul.zero.azul.env import AzulEnv
-from app.core.azul.zero.mcts.mcts import MCTS
+from azul.env import AzulEnv
+from mcts.mcts import MCTS
 import copy
 
 class ResBlock(nn.Module):
@@ -59,6 +59,7 @@ class AzulNet(nn.Module):
         # Factory Transformer
         # Input: (Batch, N+1, 5) -> Embed -> (Batch, N+1, 32)
         self.factory_embedding = nn.Linear(5, factory_embed_dim)
+        self.factory_norm = nn.LayerNorm(factory_embed_dim)
         # Learnable positional encoding to distinguish Center from Factories
         self.factory_pos_embedding = nn.Parameter(torch.randn(1, factories_count + 1, factory_embed_dim) * 0.02)
         
@@ -69,14 +70,15 @@ class AzulNet(nn.Module):
         self.factory_out_size = (factories_count + 1) * factory_embed_dim
         
         # Shared Trunk (Fusion Layer)
-        combined_size = 2 * 5 * 5 + global_size + self.factory_out_size
+        # combined_size: (policy_channels + value_channels) * 5 * 5 + global + factories
+        # policy_channels=2, value_channels=1 -> 3 * 25 = 75
+        combined_size = (2 + 1) * 5 * 5 + global_size + self.factory_out_size
         self.layer_norm = nn.LayerNorm(combined_size)
         self.fusion_fc1 = nn.Linear(combined_size, value_hidden)
         self.fusion_fc2 = nn.Linear(value_hidden, value_hidden)
         
         # Policy head
         self.policy_conv = nn.Conv2d(channels, 2, kernel_size=1)
-        self.policy_bn   = nn.BatchNorm2d(2)
         self.policy_bn   = nn.BatchNorm2d(2)
         # Input: shared trunk output (no action_mask concatenation)
         self.policy_fc1  = nn.Linear(value_hidden, value_hidden)
@@ -118,7 +120,10 @@ class AzulNet(nn.Module):
         
         # Process factories with Transformer
         # x_factories: (B, N+1, 5)
-        f = F.relu(self.factory_embedding(x_factories)) # (B, N+1, 32)
+        # Input normalization: divide by 4.0 (max tiles per color usually 4, center can be more but this scales it down)
+        f_input = x_factories / 4.0
+        f = F.relu(self.factory_embedding(f_input)) # (B, N+1, 32)
+        f = self.factory_norm(f)
         f = f + self.factory_pos_embedding # Add position info (broadcasting over batch)
         f = self.transformer(f) # (B, N+1, 32)
         f = f.reshape(f.size(0), -1) # (B, (N+1)*32)
@@ -126,10 +131,10 @@ class AzulNet(nn.Module):
         # Combine spatial + global + factories
         p = F.relu(self.policy_bn(self.policy_conv(x)))
         p = p.view(p.size(0), -1)  # (B, 2*5*5)
-        v = F.relu(self.value_bn(self.value_conv(x)))
-        v = v.view(v.size(0), -1)  # (B, 1*5*5)
+        v_feat = F.relu(self.value_bn(self.value_conv(x)))
+        v_feat = v_feat.view(v_feat.size(0), -1)  # (B, 1*5*5)
         
-        combined = torch.cat([p, x_global, f], dim=1)
+        combined = torch.cat([p, v_feat, x_global, f], dim=1)
         
         # Normalize combined features
         combined = self.layer_norm(combined)
@@ -145,8 +150,8 @@ class AzulNet(nn.Module):
         # Additive Action Masking
         if action_mask is not None:
             # mask is 1 for legal, 0 for illegal
-            # (mask - 1) * 1e9 -> 0 for legal, -1e9 for illegal
-            pi_logits = pi_logits + (action_mask - 1.0) * 1e9
+            # (mask - 1) * 1e4 -> 0 for legal, -1e4 for illegal
+            pi_logits = pi_logits + (action_mask - 1.0) * 1e4
         
         # Value head
         v = F.relu(self.value_fc1(shared))
@@ -212,7 +217,7 @@ def evaluate_against_previous(current_model, previous_model, env_args, simulatio
                 action = env.index_to_action(model.predict_without_mcts(obs))
             else:
                 mcts = MCTS(
-                    env.__class__(num_players=env.num_players, factories_count=env.N),
+                    env.__class__(num_players=env.num_players, factories_count=env.N, max_rounds=env.max_rounds),
                     model, simulations=simulations, cpuct=cpuct
                 )
                 mcts.root.env.__dict__ = copy.copy(env.__dict__)

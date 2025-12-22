@@ -206,9 +206,19 @@
           <li v-for="(entry, index) in gameState.log" :key="index">{{ entry }}</li>
         </ul>
       </div>
-      <div class="debug-section" style="margin-top: 20px; border-top: 1px solid #ccc; padding-top: 10px;">
+      <div class="debug-section" style="margin-top: 20px; border-top: 1px solid #ccc; padding-top: 10px; display: flex; align-items: center; gap: 20px;">
         <button @click="debugGame">🔍 Debug Estado</button>
+        <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
+          <input type="checkbox" v-model="neuralVisionEnabled">
+          🧠 Neural Vision (AI Analysis)
+        </label>
       </div>
+      
+      <NeuralVision 
+        v-if="showNeuralVision" 
+        :data="visualizationData" 
+        @continue="handleContinue" 
+      />
   </div>
 </template>
 
@@ -256,6 +266,7 @@ const stageRef = ref(null)
 const confirmingMove = ref(false)
 const logContainer = ref(null)
 
+import NeuralVision from './NeuralVision.vue'
 import { useRoute, useRouter } from 'vue-router'
 import boardImg from '@/assets/azul/board.png'
 import factoryImg from '@/assets/azul/factory_0.png'
@@ -286,6 +297,80 @@ const fichaImages = {
 }
 
 const gameState = ref(null)
+
+// Neural Vision refs and logic
+const neuralVisionEnabled = ref(true)
+const showNeuralVision = ref(false)
+const visualizationData = ref(null)
+const lastVisualizedTurn = ref(null)
+
+function isAiTurn() {
+    if (!gameState.value) return false
+    const currentName = gameState.value.turno_actual
+    const player = gameState.value.jugadores[currentName]
+    // Assuming backend sends 'type="ai"' in player info. 
+    // The player object in 'jugadores' keys is by ID or Name?
+    // Based on 'ensurePlayerNames', gameState.jugadores is a Dict[ID, Player]
+    // and gameState.turno_actual is Name (or ID converted to name).
+    // Let's find the player object by name
+    const p = Object.values(gameState.value.jugadores).find(j => j.name === currentName || j.id === currentName)
+    return p && p.type === 'ai'
+}
+
+watch(() => gameState.value?.turno_actual, async (newTurn) => {
+    if (newTurn) {
+        if (neuralVisionEnabled.value && isAiTurn()) {
+            // Check if we already visualized this specific turn instance
+            // (Comparing raw ID might be same as previous round, but we reset it below)
+            if (lastVisualizedTurn.value !== newTurn) {
+                startNeuralVision()
+            }
+        } else {
+            // If it's a human turn (or other), reset the tracker
+            // So when AI plays again (even with same ID), we visualize it.
+            lastVisualizedTurn.value = null
+        }
+    }
+})
+
+async function startNeuralVision() {
+    showNeuralVision.value = true
+    visualizationData.value = null
+    try {
+        const res = await fetch(`${API_BASE}/azul/${gameId}/visualize_ai`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        })
+        if (res.ok) {
+            visualizationData.value = await res.json()
+            lastVisualizedTurn.value = gameState.value.turno_actual
+        } else {
+             console.error("Failed to visualize", res.status)
+             // If not supported (e.g. Heuristic player), just auto continue?
+             // Or show error in modal.
+             const err = await res.json()
+             visualizationData.value = { 
+                network_choice: { value_pred: 0, action_idx: -1 },
+                saliency: { spatial: [], factories: [], global: [] },
+                error: err.detail || "Visualization failed" 
+             }
+        }
+    } catch(e) {
+        console.error(e)
+    }
+}
+
+async function handleContinue() {
+    showNeuralVision.value = false
+    try {
+        await fetch(`${API_BASE}/azul/${gameId}/trigger_ai`, { 
+            method: 'POST', 
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        })
+    } catch(e) {
+        console.error("Error triggering AI", e)
+    }
+}
 
 watch(() => gameState.value?.log?.length, () => {
   nextTick(() => {
@@ -490,7 +575,9 @@ async function confirmMove() {
     }
 
     // Confirmar movimiento en el backend
-    const res = await fetch(`${API_BASE}/azul/${gameId}/move`, {
+    // Si Neural Vision está activo, pausamos la IA (trigger_ai=false)
+    const shouldTriggerAi = !neuralVisionEnabled.value
+    const res = await fetch(`${API_BASE}/azul/${gameId}/move?trigger_ai=${shouldTriggerAi}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

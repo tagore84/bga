@@ -8,4 +8,5 @@ sqlalchemy
 asyncpg
 fastapi[all]
 gym
+gymnasium
 torch

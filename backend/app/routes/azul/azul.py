@@ -11,6 +11,10 @@ from sqlalchemy.future import select
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import AsyncSessionLocal
+from app.core.azul.adapter import bga_state_to_azul_zero_obs
+# Import AzulZeroMCTS to access the underlying DeepMCTSPlayer
+from app.core.azul.ai_zero import AzulZeroMCTS
+from app.core.ai_base import get_ai
 
 router = APIRouter()
 
@@ -108,8 +112,29 @@ async def delete_azul_game(game_id: int, db: AsyncSession = Depends(get_db)):
     return {"message": "Partida eliminada correctamente", "id": game_id}
 
 
+
+
+@router.post("/{game_id}/trigger_ai")
+async def trigger_ai_turn(game_id: int, db: AsyncSession = Depends(get_db)):
+    """
+    Manually triggers the AI turn processing loop.
+    Useful when AI auto-play was skipped (e.g. for visualization).
+    """
+    result = await db.execute(select(AzulGame).where(AzulGame.id == game_id))
+    partida = result.scalar_one_or_none()
+    if not partida:
+        raise HTTPException(status_code=404, detail="Partida no encontrada")
+    
+    try:
+        state = AzulGameState.parse_obj(partida.state)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Estado corrupto: {str(e)}")
+        
+    await process_ai_turns(game_id, partida, state, db)
+    return {"ok": True, "state": partida.state}
+
 @router.post("/{game_id}/move")
-async def make_move(game_id: int, move: AzulMove, db: AsyncSession = Depends(get_db)):
+async def make_move(game_id: int, move: AzulMove, trigger_ai: bool = True, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(AzulGame).where(AzulGame.id == game_id))
     partida = result.scalar_one_or_none()
     if not partida:
@@ -150,8 +175,58 @@ async def make_move(game_id: int, move: AzulMove, db: AsyncSession = Depends(get
 
     await publish_azul_update(game_id, partida.state)
 
-    await process_ai_turns(game_id, partida, state, db)
+    if trigger_ai:
+        await process_ai_turns(game_id, partida, state, db)
     return {"ok": True, "state": partida.state}
+
+
+
+@router.post("/{game_id}/visualize_ai")
+async def visualize_ai(game_id: int, db: AsyncSession = Depends(get_db)):
+    """
+    Returns visualization data (saliency maps) for the current AI player.
+    Only works if the current player is an AzulZero_MCTS (DeepMCTSPlayer).
+    """
+    result = await db.execute(select(AzulGame).where(AzulGame.id == game_id))
+    partida = result.scalar_one_or_none()
+    if not partida:
+        raise HTTPException(status_code=404, detail="Partida no encontrada")
+    
+    try:
+        state = AzulGameState.parse_obj(partida.state)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Estado corrupto: {str(e)}")
+
+    if state.terminado:
+        raise HTTPException(status_code=400, detail="La partida ha terminado")
+        
+    current_player_id = state.turno_actual
+    player_info = state.jugadores.get(current_player_id)
+    
+    if not player_info or player_info.type != "ai":
+        raise HTTPException(status_code=400, detail="El jugador actual no es una IA")
+        
+    ai_wrapper = get_ai(player_info.name)
+    
+    # Check if it wraps DeepMCTSPlayer
+    if not isinstance(ai_wrapper, AzulZeroMCTS):
+         raise HTTPException(status_code=400, detail="La IA actual no soporta visualización neuronal")
+
+    deep_player = ai_wrapper.player
+    if not hasattr(deep_player, "visualize"):
+        raise HTTPException(status_code=500, detail="La IA no tiene método de visualización")
+
+    # Convert BGA state to AzulZero observation
+    obs, _ = bga_state_to_azul_zero_obs(state)
+    
+    try:
+        vis_data = deep_player.visualize(obs)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error durante la visualización: {str(e)}")
+        
+    return vis_data
 
 async def process_ai_turns(game_id: int, partida: AzulGame, state: AzulGameState, db: AsyncSession):
     # Jugada IA si aplica (bucle IA)

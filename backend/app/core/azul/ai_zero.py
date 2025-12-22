@@ -1,13 +1,20 @@
-from app.core.ai_base import AIBase, register_ai
-from app.core.azul.zero.players.deep_mcts_player import DeepMCTSPlayer
-from app.core.azul.zero.players.random_plus_player import RandomPlusPlayer
-from app.core.azul.adapter import bga_state_to_azul_zero_obs
-from app.models.azul.azul import AzulMove, Color
+import sys
 import os
+
+# Add the 'zero' directory to sys.path so that internal imports in synced files (like 'from net import...') work
+zero_dir = os.path.join(os.path.dirname(__file__), 'zero')
+if zero_dir not in sys.path:
+    sys.path.append(zero_dir)
+
+from app.core.ai_base import AIBase, register_ai
+from app.core.azul.zero.deep_mcts_player import DeepMCTSPlayer
+from app.core.azul.zero.random_plus_player import RandomPlusPlayer
+from app.models.azul.azul import AzulMove, Color
+from app.core.azul.adapter import bga_state_to_azul_zero_obs
 
 
 class AzulZeroMCTS(AIBase):
-    def __init__(self, model_path: str, device: str = 'cpu', mcts_iters: int = 200):
+    def __init__(self, model_path: str, device: str = 'cpu', mcts_iters: int = 1, cpuct: float = 0.0, temperature: float = 0.0):
         # Resolve absolute path if needed
         if not os.path.isabs(model_path):
             # Asumimos que es relativo a backend/
@@ -16,7 +23,7 @@ class AzulZeroMCTS(AIBase):
             # But DeepMCTSPlayer loads it directly.
             pass
             
-        self.player = DeepMCTSPlayer(model_path, device=device, mcts_iters=mcts_iters)
+        self.player = DeepMCTSPlayer(model_path, device=device, mcts_iters=mcts_iters, cpuct=cpuct, temperature=temperature)
         print(f"AzulZeroMCTS loaded model from {model_path}")
 
     def select_move(self, state) -> AzulMove:
@@ -79,7 +86,7 @@ class AzulZeroRandomPlus(AIBase):
             
         return AzulMove(factory=factory_val, color=Color(color), row=row_val)
 
-from app.core.azul.zero.players.heuristic_player import HeuristicPlayer
+from app.core.azul.zero.heuristic_player import HeuristicPlayer
 
 class AzulZeroHeuristic(AIBase):
     def __init__(self):

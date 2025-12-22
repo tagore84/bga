@@ -1,3 +1,7 @@
+DOCKER_BUILDKIT=0 docker-compose up --build
+docker-compose -f docker-compose.yml up --build -d backend
+
+
 docker-compose up --build
 docker-compose down
 
