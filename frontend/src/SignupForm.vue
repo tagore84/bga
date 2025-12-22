@@ -1,12 +1,20 @@
 <template>
-    <div class="signup">
-      <h2>Crear cuenta</h2>
-      <form @submit.prevent="signup">
-        <input v-model="name" placeholder="Usuario" required />
-        <input v-model="password" type="password" placeholder="Contraseña" required />
-        <button type="submit">Registrarse</button>
+    <div class="glass-panel signup-container">
+      <h2 class="text-center mb-1">Create Account</h2>
+      <p class="text-center mb-2" style="color: var(--text-secondary)">Join the community.</p>
+
+      <form @submit.prevent="signup" class="form-grid">
+        <div class="input-group"> 
+          <input v-model="name" placeholder="Username" required />
+        </div>
+        <div class="input-group">
+          <input v-model="password" type="password" placeholder="Password" required />
+        </div>
+        
+        <button type="submit" class="btn-primary w-full mt-1">Sign Up</button>
       </form>
-      <p v-if="error" class="error">{{ error }}</p>
+      
+      <p v-if="error" class="error text-center">{{ error }}</p>
     </div>
   </template>
   
@@ -30,14 +38,14 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: name.value, password: password.value })
       })
-      if (!signupRes.ok) throw new Error('Error al registrar')
+      if (!signupRes.ok) throw new Error('Registration failed')
       const data = await signupRes.json()
       localStorage.setItem('token', data.access_token)
       //router.push('/games')
       const meRes = await fetch(`${API_BASE}/me?token=${data.access_token}`)
       const user = await meRes.json()
       emit('login-success', { token: data.access_token, name: user.name })
-      alert('Registro correcto')
+      // Removed alert
     } catch (e) {
       error.value = e.message
     }
@@ -45,22 +53,21 @@
   </script>
   
   <style scoped>
-  .signup {
-    max-width: 300px;
-    margin: 2rem auto;
-    padding: 1rem;
-    border: 1px solid #ccc;
-    border-radius: 8px;
-    background: #f9f9f9;
+  .signup-container {
+      width: 100%;
+      max-width: 400px;
+      margin: 4rem auto;
   }
-  .signup input {
-    display: block;
-    margin: 0.5rem 0;
-    width: 100%;
-    padding: 0.5rem;
+  
+  .form-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
   }
+  
   .error {
-    color: red;
-    margin-top: 1rem;
+      color: #ef4444;
+      margin-top: 1rem;
+      font-size: 0.9rem;
   }
   </style>

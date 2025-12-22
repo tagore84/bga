@@ -1,12 +1,30 @@
 <template>
-  <div class="games-list">
-    <h2>Selecciona un juego</h2>
-    <ul>
-      <li v-for="game in games" :key="game.key" class="game-item">
-        <button @click="selectGame(game)" class="select-btn">{{ game.name }}</button>
-        <button @click="deleteGame(game.id)" class="delete-btn" v-if="game.name.startsWith('test_')">🗑️</button>
-      </li>
-    </ul>
+  <div class="games-container p-4">
+    <div class="header-section text-center mb-2">
+      <h2>Available Games</h2>
+      <p style="color: var(--text-secondary)">Select a game to start playing</p>
+    </div>
+    
+    <div class="games-grid">
+      <div v-for="game in games" :key="game.key" class="game-card glass-panel">
+        <div class="card-content">
+          <div class="game-icon">
+            {{ getGameIcon(game.name) }}
+          </div>
+          <h3 class="game-title">{{ formatGameName(game.name) }}</h3>
+          <button @click="selectGame(game)" class="btn-primary w-full">Play Now</button>
+        </div>
+        
+        <button 
+          @click="deleteGame(game.id)" 
+          class="btn-danger delete-btn" 
+          v-if="game.name.startsWith('test_')"
+          title="Delete Test Game"
+        >
+          🗑️
+        </button>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -14,13 +32,22 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 
-
 const games = ref([])
 const router = useRouter()
 
 const API_BASE = window.location.hostname === 'localhost' 
     ? 'http://localhost:8000' 
     : 'http://backend:8000'
+
+function getGameIcon(name) {
+  if (name === 'tictactoe') return '⭕❌'
+  if (name === 'azul') return '💠'
+  return '🎮'
+}
+
+function formatGameName(name) {
+  return name.charAt(0).toUpperCase() + name.slice(1)
+}
 
 async function fetchGames() {
   try {
@@ -52,7 +79,7 @@ function selectGame(game) {
 }
 
 async function deleteGame(gameId) {
-  if (!confirm('¿Estás seguro de que quieres eliminar este juego de prueba?')) {
+  if (!confirm('Are you sure you want to delete this test game?')) {
     return
   }
   
@@ -71,52 +98,68 @@ async function deleteGame(gameId) {
     // Refresh the list
     await fetchGames()
   } catch (e) {
-    alert(`Error al eliminar el juego: ${e.message}`)
+    alert(`Error deleting game: ${e.message}`)
   }
 }
-
-
 </script>
 
 <style scoped>
-.active-games-btn {
-  margin-bottom: 1rem;
-  padding: 0.5em 1em;
-  background: #28a745;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-}
-.active-games-btn:hover {
-  background: #218838;
+.games-container {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 2rem;
 }
 
-.game-item {
+.games-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 1.5rem;
+}
+
+.game-card {
+  position: relative;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
+  overflow: hidden;
 }
 
-.select-btn {
-  flex: 1;
-  padding: 10px;
-  font-size: 16px;
+.game-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.4);
+  border-color: var(--primary-glow);
+}
+
+.card-content {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1rem;
+}
+
+.game-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.game-title {
+  margin-bottom: 1.5rem;
+  font-size: 1.5rem;
+  text-transform: capitalize;
 }
 
 .delete-btn {
-  background: #dc3545;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  padding: 8px 12px;
-  cursor: pointer;
-  font-size: 16px;
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  padding: 5px;
+  font-size: 0.8rem;
+  opacity: 0.7;
 }
 
 .delete-btn:hover {
-  background: #c82333;
+  opacity: 1;
 }
 </style>

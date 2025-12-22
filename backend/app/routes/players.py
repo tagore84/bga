@@ -15,7 +15,7 @@ class PlayerOut(BaseModel):
     type: Literal["human", "ai"]
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 @router.get("/", response_model=list[PlayerOut])
 async def list_players(db: AsyncSession = Depends(get_db)):

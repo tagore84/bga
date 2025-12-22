@@ -18,7 +18,7 @@ fi
 mkdir -p "$DEST_DIR"
 
 # Use rsync to copy files, preserving permissions and overwriting changed files
-rsync -av --delete "$SRC_DIR/src/players/" "$DEST_DIR/"
+rsync -av --delete --exclude "deep_mcts_player.py" "$SRC_DIR/src/players/" "$DEST_DIR/"
 rsync -av --delete "$SRC_DIR/src/net/" "$DEST_DIR/net/"
 rsync -av --delete "$SRC_DIR/src/mcts/" "$DEST_DIR/mcts/"
 rsync -av --delete "$SRC_DIR/src/azul/" "$DEST_DIR/azul/"

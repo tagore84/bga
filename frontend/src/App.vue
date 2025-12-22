@@ -25,8 +25,6 @@ function onLoginSuccess({ token: t, username: u }) {
 </script>
 
 <style>
-#app {
-  font-family: Avenir, Helvetica, Arial, sans-serif;
-  text-align: center;
-}
+/* Global styles are now in style.css */
 </style>
+

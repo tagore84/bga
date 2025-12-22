@@ -65,12 +65,13 @@ async def seed_ai_players(db: AsyncSession):
         select(Game).where(Game.name == "azul")
     )
     game_existing_azul = game_result_azul.scalar_one_or_none()
+    azul_game_id = game_existing_azul.id
     existing_azul_ai = result.scalar_one_or_none()
     if not existing_azul_ai:
         ia = Player(
             name="RandomAzul",
             description="Elige movimientos válidos al azar",
-            game_id=game_existing_azul.id,
+            game_id=azul_game_id,
             hashed_password=None,
             type = PlayerType.ai,
         )
@@ -85,7 +86,13 @@ async def seed_ai_players(db: AsyncSession):
     azul_zero_players = [
         ("AzulZero_RandomPlus", "IA aleatoria mejorada (evita penalizaciones obvias)"),
         ("AzulZero_MCTS", "IA basada en AlphaZero (MCTS + Red Neuronal)"),
-        ("AzulZero_Heuristic", "IA heurística (reglas manuales)")
+        ("AzulZero_Heuristic", "IA heurística (reglas manuales)"),
+        ("AzulZero_Heuristic", "IA heurística mejorada (evita overflow y completa filas)"),
+        ("MinMax", "Estrategia MinMax (Profundidad 2)"),
+        ("MCTS_low", "MCTS Heurístico (50 simulaciones)"),
+        ("MCTS_high", "MCTS Heurístico (300 simulaciones)"),
+        ("MinMax_low", "Estrategia MinMax (Profundidad 2)"),
+        ("MinMax_high", "Estrategia MinMax (Profundidad 4)")
     ]
 
     for ai_name, ai_desc in azul_zero_players:
@@ -96,7 +103,7 @@ async def seed_ai_players(db: AsyncSession):
             ia = Player(
                 name=ai_name,
                 description=ai_desc,
-                game_id=game_existing_azul.id,
+                game_id=azul_game_id,
                 hashed_password=None,
                 type=PlayerType.ai,
             )

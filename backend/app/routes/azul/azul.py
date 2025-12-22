@@ -14,7 +14,9 @@ from app.db.session import AsyncSessionLocal
 from app.core.azul.adapter import bga_state_to_azul_zero_obs
 # Import AzulZeroMCTS to access the underlying DeepMCTSPlayer
 from app.core.azul.ai_zero import AzulZeroMCTS
+from app.core.azul.deep_mcts_player_adapter import AIAzulDeepMCTS
 from app.core.ai_base import get_ai
+from app.core.azul.logger import game_logger
 
 router = APIRouter()
 
@@ -152,6 +154,10 @@ async def make_move(game_id: int, move: AzulMove, trigger_ai: bool = True, db: A
 
     # Aplicar el movimiento
     old_round = state.ronda
+    
+    # LOGGING: Capture state before
+    state_before = json.loads(state.json())
+    
     aplicar_movimiento(state, jugador_id, move)
 
     # Avanzar al siguiente turno SOLO si la ronda no ha cambiado y el juego no ha terminado
@@ -172,6 +178,10 @@ async def make_move(game_id: int, move: AzulMove, trigger_ai: bool = True, db: A
     db.add(partida)
     await db.commit()
     await db.refresh(partida)
+
+    # LOGGING: Log after successful commit
+    state_after = json.loads(state.json())
+    game_logger.log_move(game_id, move.dict(), jugador_id, state_before, state_after)
 
     await publish_azul_update(game_id, partida.state)
 
@@ -209,7 +219,7 @@ async def visualize_ai(game_id: int, db: AsyncSession = Depends(get_db)):
     ai_wrapper = get_ai(player_info.name)
     
     # Check if it wraps DeepMCTSPlayer
-    if not isinstance(ai_wrapper, AzulZeroMCTS):
+    if not isinstance(ai_wrapper, (AzulZeroMCTS, AIAzulDeepMCTS)):
          raise HTTPException(status_code=400, detail="La IA actual no soporta visualización neuronal")
 
     deep_player = ai_wrapper.player
@@ -245,7 +255,13 @@ async def process_ai_turns(game_id: int, partida: AzulGame, state: AzulGameState
 
         # Aplicar jugada IA
         old_round = state.ronda
+
+        
+        # LOGGING: Capture state before
+        state_before = json.loads(state.json())
+        
         aplicar_movimiento(state, siguiente_jugador, ai_move)
+        
         print(f"IA {jugador_info.name} ha jugado: {ai_move}")
         
         # Avanzar turno nuevamente si quedan movimientos y NO cambió la ronda
@@ -265,6 +281,10 @@ async def process_ai_turns(game_id: int, partida: AzulGame, state: AzulGameState
         print(f"Estado actualizado después del movimiento IA: {partida.state}")
         await db.commit()
         await db.refresh(partida)
+
+        # LOGGING: Log after successful commit
+        state_after = json.loads(state.json())
+        game_logger.log_move(game_id, ai_move.dict(), siguiente_jugador, state_before, state_after)
 
         await publish_azul_update(game_id, partida.state)
     print(f"Estado final después de todas las jugadas: {partida.state}")

@@ -1,5 +1,6 @@
 import sys
 import os
+import numpy as np
 
 # Add the 'zero' directory to sys.path so that internal imports in synced files (like 'from net import...') work
 zero_dir = os.path.join(os.path.dirname(__file__), 'zero')
@@ -14,7 +15,7 @@ from app.core.azul.adapter import bga_state_to_azul_zero_obs
 
 
 class AzulZeroMCTS(AIBase):
-    def __init__(self, model_path: str, device: str = 'cpu', mcts_iters: int = 1, cpuct: float = 0.0, temperature: float = 0.0):
+    def __init__(self, model_path: str, device: str = 'cpu', mcts_iters: int = 200, cpuct: float = 1.0):
         # Resolve absolute path if needed
         if not os.path.isabs(model_path):
             # Asumimos que es relativo a backend/
@@ -23,7 +24,7 @@ class AzulZeroMCTS(AIBase):
             # But DeepMCTSPlayer loads it directly.
             pass
             
-        self.player = DeepMCTSPlayer(model_path, device=device, mcts_iters=mcts_iters, cpuct=cpuct, temperature=temperature)
+        self.player = DeepMCTSPlayer(model_path, device=device, mcts_iters=mcts_iters, cpuct=cpuct)
         print(f"AzulZeroMCTS loaded model from {model_path}")
 
     def select_move(self, state) -> AzulMove:
@@ -86,7 +87,7 @@ class AzulZeroRandomPlus(AIBase):
             
         return AzulMove(factory=factory_val, color=Color(color), row=row_val)
 
-from app.core.azul.zero.heuristic_player import HeuristicPlayer
+from app.core.azul.zero.heuristic_player import HeuristicPlayer, decode_action
 
 class AzulZeroHeuristic(AIBase):
     def __init__(self):
@@ -98,6 +99,11 @@ class AzulZeroHeuristic(AIBase):
         
         if action is None:
              raise RuntimeError(f"AzulZeroHeuristic returned None action. Obs: {obs}")
+
+        # HeuristicPlayer returns an int (flat index), handle it
+        if isinstance(action, (int, np.integer)):
+             from app.core.azul.zero.heuristic_player import decode_action
+             action = decode_action(int(action))
              
         return self._action_to_move(action, state)
 
@@ -117,6 +123,41 @@ class AzulZeroHeuristic(AIBase):
             
         return AzulMove(factory=factory_val, color=Color(color), row=row_val)
 
+from app.core.azul.zero.heuristic_player import HeuristicPlayer
+
+class AzulZeroHeuristic(AIBase):
+    def __init__(self):
+        self.player = HeuristicPlayer()
+
+    def select_move(self, state) -> AzulMove:
+        obs, player_ids = bga_state_to_azul_zero_obs(state)
+        action = self.player.predict(obs)
+
+        if action is None:
+             raise RuntimeError(f"AzulZeroHeuristic returned None action. Obs: {obs}")
+
+        if isinstance(action, (int, np.integer)):
+             from app.core.azul.zero.heuristic_player import decode_action
+             action = decode_action(int(action))
+
+        return self._action_to_move(action, state)
+
+    def _action_to_move(self, action: tuple, state) -> AzulMove:
+        source_idx, color, dest = action
+        num_factories = len(state.expositores)
+
+        if source_idx < num_factories:
+            factory_val = str(source_idx)
+        else:
+            factory_val = "centro"
+
+        if dest == 5:
+            row_val = 0
+        else:
+            row_val = dest + 1
+
+        return AzulMove(factory=factory_val, color=Color(color), row=row_val)
+
 # Register players
 # Use path relative to this file
 model_path = os.path.join(os.path.dirname(__file__), "zero/models/best.pt")
@@ -126,4 +167,5 @@ else:
     print(f"Warning: Model not found at {model_path}, skipping AzulZero_MCTS registration")
 
 register_ai("AzulZero_RandomPlus", AzulZeroRandomPlus())
+register_ai("Fácil", AzulZeroRandomPlus())
 register_ai("AzulZero_Heuristic", AzulZeroHeuristic())

@@ -1,37 +1,64 @@
 <template>
-  <div class="azul-game">
-      <div class="header-container">
-        <h2>Partida Azul #{{ gameId }}</h2>
-        <button @click="goHome" class="back-button">Volver al Inicio</button>
-      </div>
-      <div class="user-info">
-        <p><strong>Usuario:</strong> {{ me }}</p>
-        <p><strong>Turno actual:</strong> <span :class="{ 'active-turn': true }">{{ gameState?.turno_actual }}</span></p>
-      </div>
-      <div v-if="!loaded">Cargando...</div>
-      <div v-else-if="error">Error: {{ error }}</div>
-      <div v-else-if="gameState">
-        <div v-if="gameState.jugadores">
-          <div v-for="(jugador, id) in gameState.jugadores" :key="id" class="jugador-info" :class="{ 'is-active': gameState.turno_actual === jugador.name }">
-            <h3>
-              {{ jugador.name || ('Jugador ' + id) }} 
-              <span v-if="jugador.name === me">(TÚ)</span>
-              - {{ jugador.puntos }} puntos
-              <span v-if="gameState.turno_actual === jugador.name">⭐ TURNO</span>
-            </h3>
-          </div>
-          <template v-if="selectedRow !== null">
-            <button @click="confirmMove" :disabled="confirmingMove" class="confirm-button">
-              <span v-if="confirmingMove">Confirmando...</span>
-              <span v-else>OK</span>
-            </button>
-          </template>
-          <template v-if="selectedColor !== null">
-            <button @click="cancelMove">Cancelar</button>
-          </template>
+  <div class="azul-game-container">
+      <div class="glass-panel header-section mb-2">
+        <div class="header-row">
+          <h2>Azul Match #{{ gameId }}</h2>
+          <button @click="goHome" class="btn-danger small-btn">Exit Game</button>
         </div>
-        <div v-else>
-          <p>No hay datos de jugadores.</p>
+        
+        <div class="user-status mt-1">
+          <p><span class="label">Player:</span> {{ me }}</p>
+          <p><span class="label">Current Turn:</span> <span class="highlight">{{ gameState?.turno_actual }}</span></p>
+        </div>
+      </div>
+
+      <div v-if="!loaded" class="text-center">Loading game state...</div>
+      <div v-else-if="error" class="error-msg">Error: {{ error }}</div>
+      
+      <div v-else-if="gameState">
+        <div class="glass-panel players-panel mb-2">
+             <div v-if="gameState.jugadores" class="players-grid">
+              <div 
+                v-for="(jugador, id) in gameState.jugadores" 
+                :key="id" 
+                class="player-card" 
+                :class="{ 'active': gameState.turno_actual === jugador.name }"
+              >
+                <div class="player-header">
+                  <span class="player-name">{{ jugador.name || ('Player ' + id) }}</span>
+                  <span v-if="jugador.name === me" class="me-badge">(YOU)</span>
+                  <div v-if="gameState.turno_actual === jugador.name && aiThinking" class="ai-spinner" title="AI Thinking...">⏳</div>
+                </div>
+                <div class="player-score">{{ jugador.puntos }} pts</div>
+                <div v-if="gameState.turno_actual === jugador.name" class="turn-indicator">⭐ ACTIVO</div>
+              </div>
+             </div>
+             <div v-else>No player data available.</div>
+        </div>
+
+        <!-- Action Bar -->
+        <div class="actions-bar" v-if="selectedRow !== null || selectedColor !== null">
+          <div class="glass-panel action-panel">
+            <span class="action-text">Confirm Move?</span>
+            <div class="action-buttons">
+              <button 
+                v-if="selectedRow !== null" 
+                @click="confirmMove" 
+                :disabled="confirmingMove" 
+                class="btn-primary"
+              >
+                {{ confirmingMove ? 'Processing...' : 'Confirm Move' }}
+              </button>
+              
+              <button 
+                v-if="selectedColor !== null" 
+                @click="cancelMove"
+                class="btn-secondary"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
         </div>
         <v-stage
           ref="stageRef"
@@ -85,12 +112,16 @@
                 <template v-for="(casilla, i) in fila" :key="'patron-casilla-' + y + '-' + i + '-j' + jIndex">
                   <template v-if="casilla !== null && casilla !== ''">
                     <v-image
-                      :x="(610 + (jIndex % 2) * 360) + 129 - 29 * (y + 1) + 29 * (i + 1 + (y + 1 - fila.length))"
+                      :x="(610 + (jIndex % 2) * 360) + 129 - 29 * i"
                       :y="(250 + Math.floor(jIndex / 2) * 240) + 14 + y * 29"
                       :width="28"
                       :height="28"
                       :image="getColorImg(casilla)"
                       :onclick="() => handleRowClick(y + 1)"
+                      :stroke="isLastMoveTile(jugador, y, i, false) ? 'yellow' : null"
+                      :strokeWidth="isLastMoveTile(jugador, y, i, false) ? 4 : 0"
+                      :shadowColor="isLastMoveTile(jugador, y, i, false) ? 'orange' : null"
+                      :shadowBlur="isLastMoveTile(jugador, y, i, false) ? 20 : 0"
                     />
                   </template>
                   <template v-else>
@@ -128,6 +159,10 @@
                   :width="28"
                   :height="28"
                   :image="getColorImg(casilla)"
+                  :stroke="isLastMoveTile(jugador, -1, i, true) ? 'yellow' : null"
+                  :strokeWidth="isLastMoveTile(jugador, -1, i, true) ? 4 : 0"
+                  :shadowColor="isLastMoveTile(jugador, -1, i, true) ? 'orange' : null"
+                  :shadowBlur="isLastMoveTile(jugador, -1, i, true) ? 20 : 0"
                 />
               </template>
               <!-- First player tile on floor -->
@@ -164,8 +199,8 @@
             </template>
             <template v-for="(color, i) in gameState?.centro" :key="'centro-' + i">
               <v-image
-                :x="32 + (i % 2) * 50"
-                :y="230 + Math.floor(i / 2) * 50"
+                :x="100 + (i % 5) * 40"
+                :y="230 + Math.floor(i / 5) * 40"
                 :width="30"
                 :height="30"
                 :image="getColorImg(color)"
@@ -178,10 +213,10 @@
             <!-- First player tile in center -->
             <v-image
               v-if="gameState?.first_player_marker_in_center"
-              :x="50"
-              :y="200"
-              :width="40"
-              :height="40"
+              :x="60"
+              :y="230"
+              :width="35"
+              :height="35"
               :image="firstPlayerTileImage"
             />
           </v-layer>
@@ -206,12 +241,15 @@
           <li v-for="(entry, index) in gameState.log" :key="index">{{ entry }}</li>
         </ul>
       </div>
-      <div class="debug-section" style="margin-top: 20px; border-top: 1px solid #ccc; padding-top: 10px; display: flex; align-items: center; gap: 20px;">
+        <div class="debug-section" style="margin-top: 20px; border-top: 1px solid #ccc; padding-top: 10px; display: flex; align-items: center; gap: 20px;">
         <button @click="debugGame">🔍 Debug Estado</button>
-        <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
+        <label v-if="isNeuralVisionAvailable" style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
           <input type="checkbox" v-model="neuralVisionEnabled">
           🧠 Neural Vision (AI Analysis)
         </label>
+        <div v-else style="color: grey; font-style: italic; font-size: 0.9em;">
+             (Neural Vision not available - No DeepMCTS AI in game)
+        </div>
       </div>
       
       <NeuralVision 
@@ -219,11 +257,18 @@
         :data="visualizationData" 
         @continue="handleContinue" 
       />
+
+      <GameOverModal
+        v-if="gameState?.terminado"
+        :players="gameState.jugadores"
+        :me="me"
+        @home="goHome"
+      />
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
+import { ref, onMounted, onBeforeUnmount, nextTick, watch, computed } from 'vue'
 // ... existing imports ...
 
 function debugGame() {
@@ -267,6 +312,7 @@ const confirmingMove = ref(false)
 const logContainer = ref(null)
 
 import NeuralVision from './NeuralVision.vue'
+import GameOverModal from './GameOverModal.vue'
 import { useRoute, useRouter } from 'vue-router'
 import boardImg from '@/assets/azul/board.png'
 import factoryImg from '@/assets/azul/factory_0.png'
@@ -298,11 +344,21 @@ const fichaImages = {
 
 const gameState = ref(null)
 
+const isNeuralVisionAvailable = computed(() => {
+    if (!gameState.value || !gameState.value.jugadores) return false
+    // Check if any player has type 'azul_deep_mcts'
+    // Note: The backend logic checks isinstance(ai, (AzulZeroMCTS, AIAzulDeepMCTS))
+    // The player.type field comes from the database/creation logic.
+    // For AIAzulDeepMCTS, the registered key is "azul_deep_mcts".
+    return Object.values(gameState.value.jugadores).some(p => p.type === 'azul_deep_mcts')
+})
+
 // Neural Vision refs and logic
-const neuralVisionEnabled = ref(true)
+const neuralVisionEnabled = ref(false)
 const showNeuralVision = ref(false)
 const visualizationData = ref(null)
 const lastVisualizedTurn = ref(null)
+const aiThinking = ref(false)
 
 function isAiTurn() {
     if (!gameState.value) return false
@@ -319,17 +375,31 @@ function isAiTurn() {
 
 watch(() => gameState.value?.turno_actual, async (newTurn) => {
     if (newTurn) {
-        if (neuralVisionEnabled.value && isAiTurn()) {
-            // Check if we already visualized this specific turn instance
-            // (Comparing raw ID might be same as previous round, but we reset it below)
-            if (lastVisualizedTurn.value !== newTurn) {
-                startNeuralVision()
+        if (isAiTurn() && !gameState.value.terminado) {
+            if (neuralVisionEnabled.value) {
+                // Check if we already visualized this specific turn instance
+                if (lastVisualizedTurn.value !== newTurn) {
+                    startNeuralVision()
+                }
+            } else {
+                // Auto-trigger AI if visualization is disabled
+                // Add a small delay for better UX
+                aiThinking.value = true
+                setTimeout(() => {
+                    handleContinue()
+                }, 1000)
             }
         } else {
             // If it's a human turn (or other), reset the tracker
-            // So when AI plays again (even with same ID), we visualize it.
+            aiThinking.value = false
             lastVisualizedTurn.value = null
         }
+    }
+})
+
+watch(() => gameState.value?.terminado, (isTerminated) => {
+    if (isTerminated) {
+        showNeuralVision.value = false
     }
 })
 
@@ -369,6 +439,8 @@ async function handleContinue() {
         })
     } catch(e) {
         console.error("Error triggering AI", e)
+    } finally {
+        aiThinking.value = false
     }
 }
 
@@ -408,6 +480,49 @@ function handleCenterClick(color) {
   selectedColor.value = color
   selectedRow.value = null // deselecciona fila si se eligen nuevos cristales
 }
+
+function isLastMoveTile(player, row, index, isFloor) {
+  const lm = gameState.value?.last_move
+  if (!lm) return false
+  
+  // Check player. 
+  // lm.player_id is the key in players dict or the name?
+  // In `aplicar_movimiento`: state.last_move = { "player_id": jugador_id ... }
+  // player_id is the id used in state.jugadores dict.
+  // In v-for: (jugador, id) in gameState.jugadores
+  // So we can pass 'id' from v-for, or check if player.name matches (if IDs are names).
+  // The backend uses string IDs mainly.
+  // Let's assume we need to check against the player's ID or Name.
+  // Let's check both to be safe: 
+  // But wait, the v-for yields `jugador` object. We don't have the `key` (id) easily unless passed.
+  // The v-for is `(jugador, jIndex) in Object.values(gameState.jugadores)`. 
+  // Wait, line 73: `v-for="(jugador, jIndex) in Object.values(gameState.jugadores)"`
+  // Here we lose the ID key! 
+  // But `jugador.id` should be available inside the object (JugadorAzul model has id field).
+  if (lm.player_id !== player.id && lm.player_id !== player.name) return false
+
+  // Check round
+  if (lm.round_at_move !== gameState.value.ronda) return false
+
+  if (isFloor) {
+     if (lm.added_to_floor <= 0) return false
+     // Return true if index is among the last N tiles
+     // Total tiles: player.suelo.length
+     // Last added: lm.added_to_floor
+     // New tiles are from index: length - added
+     return index >= (player.suelo.length - lm.added_to_floor)
+  } else {
+     // Pattern Row
+     if (lm.target_row_index !== row) return false
+     if (lm.added_to_pattern <= 0) return false
+     
+     // Pattern is filled from left to right in the array (push).
+     // index 0..N
+     // New tiles are at the end.
+     return index >= (player.patrones[row].length - lm.added_to_pattern)
+  }
+}
+
 
 
 // Nueva lógica para selección de filas de patrones
@@ -496,7 +611,7 @@ async function confirmMove() {
     for (let i = 0; i < origenes.length; i++) {
       if (origenes[i] === color) {
         if (isCenter) {
-          coords.push({ x: 100 + i * 35, y: 300 })
+          coords.push({ x: 100 + (i % 5) * 40, y: 230 + Math.floor(i / 5) * 40 })
         } else {
           const x = origin * 160 + 32 + (i % 2) * 50
           const y = 80 + Math.floor(i / 2) * 50
@@ -525,10 +640,13 @@ async function confirmMove() {
     animatedPieces.value = coords.map((c) => ({ x: c.x, y: c.y, color }))
 
     // Elimina piezas visualmente del origen para que no se dupliquen durante la animación
+    // Y mueve el resto al centro si es desde una fábrica
     if (isCenter) {
       gameState.value.centro = gameState.value.centro.filter(c => c !== color)
     } else {
-      gameState.value.expositores[origin] = gameState.value.expositores[origin].filter(c => c !== color)
+      const leftovers = gameState.value.expositores[origin].filter(c => c !== color)
+      gameState.value.centro.push(...leftovers)
+      gameState.value.expositores[origin] = []
     }
 
     await nextTick()
@@ -554,15 +672,19 @@ async function confirmMove() {
     if (jugador && selectedRow.value > 0) {
       // Only update pattern lines if not going to floor
       const filaActual = jugador.patrones[selectedRow.value - 1]
-      const huecosDisponibles = filaActual.length - filaActual.filter(c => c !== null && c !== '').length
-      const fichasAColocar = Math.min(huecosDisponibles, coords.length)
-      let colocadas = 0
-      for (let i = 0; i < filaActual.length && colocadas < fichasAColocar; i++) {
-        if (filaActual[i] === null || filaActual[i] === '') {
-          filaActual[i] = color
-          colocadas++
-        }
+      // Fix: patterns are dynamic arrays matching backend state, not fixed arrays with nulls.
+      // Calculate capacity based on row number (1-based)
+      const capacity = selectedRow.value
+      // Available slots is capacity minus current filled slots (length of dynamic array)
+      const huecosDisponibles = capacity - filaActual.length
+      
+      const fichasAColocar = Math.max(0, Math.min(huecosDisponibles, coords.length))
+
+      // Append new tiles to the dynamic array
+      for (let i = 0; i < fichasAColocar; i++) {
+        filaActual.push(color)
       }
+
       const sobrantes = coords.length - fichasAColocar
       for (let i = 0; i < sobrantes; i++) {
         jugador.suelo.push(color)
@@ -574,9 +696,15 @@ async function confirmMove() {
       }
     }
 
+
+    // Limpiar animación antes de llamar al backend para evitar duplicados mientras la IA piensa
+    animatedPieces.value = []
+
     // Confirmar movimiento en el backend
     // Si Neural Vision está activo, pausamos la IA (trigger_ai=false)
-    const shouldTriggerAi = !neuralVisionEnabled.value
+    // FIX: Always pause AI trigger here so we get the state update first.
+    // The watcher on turno_actual will trigger the AI.
+    const shouldTriggerAi = false 
     const res = await fetch(`${API_BASE}/azul/${gameId}/move?trigger_ai=${shouldTriggerAi}`, {
       method: 'POST',
       headers: {
@@ -597,7 +725,9 @@ async function confirmMove() {
     if (data.ok && data.state) {
       const updatedState = data.state
       ensurePlayerNames(updatedState)
+      console.log('DEBUG: Updating gameState. Terminado?', updatedState.terminado)
       gameState.value = updatedState
+      console.log('DEBUG: gameState updated. Current value:', gameState.value)
       console.log('Movimiento confirmado y estado actualizado:', updatedState)
     } else {
        // Fallback or error handling if needed
@@ -605,12 +735,11 @@ async function confirmMove() {
     }
     }
 
+  } finally {
     animatedPieces.value = []
-
     selectedFactory.value = null
     selectedColor.value = null
     selectedRow.value = null
-  } finally {
     confirmingMove.value = false
   }
 }
@@ -728,192 +857,193 @@ if (socket) socket.close()
 </script>
 
 <style scoped>
-.loading { font-size: 1.2em; color: #666; }
-.error { color: red; margin: 1em; }
-.result { font-size: 1.5em; margin-bottom: 1em; }
-.back-button { padding: 0.5em 1em; font-size: 1em; margin-top: 0.5em; cursor: pointer; }
-.header-container {
+/* Main Container */
+.azul-game-container {
+  padding: 1rem;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* Header Section */
+.header-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.header-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1em;
-}
-.tic-tac-toe { display: flex; flex-direction: column; align-items: center; margin-top: 2rem; }
-
-.jugador {
-margin-bottom: 2em;
-}
-.fila {
-display: grid;
-grid-template-columns: repeat(5, 2em);
-gap: 0.2em;
-}
-.casilla {
-text-align: center;
-border: 1px solid #ccc;
-padding: 0.3em;
-}
-.expositores, .centro {
-margin-top: 1rem;
-padding: 1rem;
-background: #f9f9f9;
-border-radius: 8px;
 }
 
-.expositor {
-margin-bottom: 0.5rem;
+.small-btn {
+  padding: 0.4rem 0.8rem;
+  font-size: 0.9rem;
 }
 
-.tablero-fondo {
-width: 100%;
-height: auto;
-display: block;
-}
-
-.grid-pared {
-position: absolute;
-top: 0;
-left: 0;
-display: grid;
-grid-template-columns: repeat(5, 1fr);
-grid-template-rows: repeat(5, 1fr);
-width: 100%;
-height: 100%;
-}
-
-.casilla {
-display: flex;
-justify-content: center;
-align-items: center;
-font-weight: bold;
-color: white; /* o negro si prefieres */
-}
-
-.grid-patrones {
-position: absolute;
-top: 17.5%;
-left: 8.2%;
-width: 14%;
-height: 63%;
-display: grid;
-grid-template-rows: repeat(5, 1fr);
-gap: 4.5%; /* espacio entre filas, puede afinarse */
-}
-
-.patron-fila {
-display: flex;
-flex-direction: flex-end;
-gap: 3%; /* espacio entre losetas dentro de cada fila */
-}
-.patron-casilla {
-width: 1em;
-height: 1em;
-background-color: rgba(255, 255, 255, 0.4); /* para depuración */
-border-radius: 4px;
-}
-.expositor-contenedor {
-position: relative;
-width: 150px; /* ajusta según tu imagen */
-height: 150px;
-margin: 1em auto;
-}
-
-.expositor-fondo {
-width: 100%;
-height: 100%;
-display: block;
-}
-
-.expositor-fichas {
-position: absolute;
-top: 0;
-left: 0;
-display: flex;
-flex-wrap: wrap;
-justify-content: center;
-align-items: center;
-width: 100%;
-height: 100%;
-padding: 0.5em;
-gap: 0.5em;
-}
-
-.ficha {
-width: 2em;
-height: 2em;
-background-color: white;
-border-radius: 50%;
-display: flex;
-justify-content: center;
-align-items: center;
-font-weight: bold;
-}
-
-.ficha-img {
-width: 100%;
-height: 100%;
-object-fit: contain;
-}
-
-.fabrica-lista {
-display: flex;
-flex-wrap: wrap;
-justify-content: center;
-gap: 1em;
-margin: 2em 0;
-}
-
-.centro-fichas {
+.user-status {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 0.5em;
-  margin-top: 1em;
+  gap: 2rem;
 }
 
-.user-info {
-  background: #eef;
-  padding: 10px;
-  border-radius: 5px;
-  margin-bottom: 10px;
+.label {
+  color: var(--text-secondary);
+  margin-right: 0.5rem;
 }
 
-.active-turn {
-  color: #d32f2f;
-  font-weight: bold;
+.highlight {
+  color: var(--accent);
+  font-weight: 600;
 }
 
-.jugador-info {
-  padding: 5px;
+/* Players Panel */
+.players-panel {
+  padding: 1rem;
+}
+
+.players-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.player-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  padding: 1rem;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.player-card.active {
+  background: rgba(59, 130, 246, 0.1); /* Primary 10% opacity */
+  border-color: var(--primary);
+  box-shadow: 0 0 15px rgba(59, 130, 246, 0.2);
+}
+
+.player-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.player-name {
+  font-weight: 600;
+  font-size: 1.1rem;
+}
+
+.me-badge {
+  background: var(--accent);
+  color: black;
+  font-size: 0.7rem;
+  padding: 2px 6px;
   border-radius: 4px;
+  font-weight: 700;
 }
 
-.jugador-info.is-active {
-  background-color: #fff3e0;
-  border: 1px solid #ff9800;
+.player-score {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
 }
 
+.turn-indicator {
+  color: #fbbf24; /* Amber 400 */
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin-top: auto;
+}
+
+/* Action Bar */
+.actions-bar {
+  position: fixed;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+}
+
+.action-panel {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  padding: 1rem 2rem;
+  border: 1px solid var(--border-glow);
+  box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+}
+
+.action-text {
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 1rem;
+}
+
+.btn-secondary {
+  background: transparent;
+  border: 1px solid var(--text-secondary);
+  color: var(--text-secondary);
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-secondary:hover {
+  background: rgba(255,255,255,0.1);
+  color: white;
+  border-color: white;
+}
+
+/* Game Log & Debug */
 .game-log {
-  margin-top: 20px;
-  padding: 10px;
-  border: 1px solid #ccc;
-  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  padding: 1rem;
   max-height: 200px;
   overflow-y: auto;
-  background: #fff;
-}
-.game-log ul {
-  list-style-type: none;
-  padding: 0;
-  margin: 0;
-}
-.game-log li {
-  padding: 5px 0;
-  border-bottom: 1px solid #eee;
+  margin-top: 2rem;
+  color: var(--text-secondary);
 }
 
-.confirm-button[disabled] {
-  opacity: 0.5;
-  cursor: not-allowed;
+.game-log li {
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.ai-spinner {
+  display: inline-block;
+  font-size: 1.2rem;
+  animation: spin 2s linear infinite;
+  margin-left: auto;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.debug-section {
+  color: var(--text-secondary);
+  margin-top: 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-light);
+}
+
+/* Misc */
+.error-msg {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+  padding: 1rem;
+  border-radius: var(--radius-sm);
+  text-align: center;
+  margin: 1rem 0;
 }
 </style>

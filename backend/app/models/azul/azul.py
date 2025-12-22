@@ -53,6 +53,7 @@ class AzulGameState(BaseModel):
     terminado: bool = False
     log: List[str] = Field(default_factory=list)
     first_player_marker_in_center: bool = True
+    last_move: Optional[dict] = None
 
 
 class AzulGameOutput(BaseModel):
@@ -60,7 +61,7 @@ class AzulGameOutput(BaseModel):
     state: AzulGameState
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class AzulMove(BaseModel):
     factory: int | str  # puede ser un índice numérico o el string 'centro'
@@ -284,6 +285,18 @@ def aplicar_movimiento(state: AzulGameState, jugador_id: str, move: AzulMove):
         state.centro.extend(restantes)
         state.expositores[factory_index] = []
 
+    # Validation: Ensure at least one tile was taken
+    if not fichas_tomadas:
+        source_name = "Centro" if move.factory == "centro" else f"Fábrica {move.factory}"
+        # color name
+        color_names = ["Azul", "Amarillo", "Rojo", "Negro", "Naranja"]
+        c_name = color_names[int(color)] if isinstance(color, int) else str(color)
+        raise ValueError(f"Movimiento inválido: No hay fichas de color {c_name} en {source_name}")
+
+    # Track tracking info
+    added_to_pattern = 0
+    added_to_floor = 0
+
     # Paso 2: intentar colocar fichas en la fila de patrón
     if row == -1: # move.row was 0, meaning Floor
         sobrantes = len(fichas_tomadas)
@@ -294,14 +307,27 @@ def aplicar_movimiento(state: AzulGameState, jugador_id: str, move: AzulMove):
             colocar = min(len(fichas_tomadas), espacio_disponible)
             jugador.patrones[row].extend([color] * colocar)
             sobrantes = len(fichas_tomadas) - colocar
+            added_to_pattern = colocar
         else:
             sobrantes = len(fichas_tomadas)
+            added_to_pattern = 0
 
     # Paso 3: poner fichas sobrantes en el suelo
     jugador.suelo.extend([color] * sobrantes)
+    added_to_floor = sobrantes
+    
+    # populate last_move
+    state.last_move = {
+        "player_id": jugador_id,
+        "color": color,
+        "target_row_index":row, # -1 for floor, 0-4 for pattern
+        "added_to_pattern": added_to_pattern,
+        "added_to_floor": added_to_floor,
+        "round_at_move": state.ronda
+    }
     
     # Log move
-    color_names = ["Azul", "Amarillo", "Rojo", "Negro", "Naranja"] # Map Color enum to Spanish names if desired, or English
+    color_names = ["Azul", "Amarillo", "Naranja", "Negro", "Rojo"] # Map Color enum to Spanish names if desired, or English
     color_name = color_names[int(color)] if isinstance(color, int) else str(color)
     
     source_name = "Centro" if move.factory == "centro" else f"Fábrica {move.factory}"

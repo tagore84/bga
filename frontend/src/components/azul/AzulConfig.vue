@@ -1,26 +1,56 @@
 <template>
-  <div class="azul-config">
-    <h2>Configurar nueva partida de Azul</h2>
-    <div v-if="error" class="error">{{ error }}</div>
+  <div class="glass-panel config-container">
+    <h2 class="text-center mb-1">Create Azul Game</h2>
+    <p class="text-center mb-2" style="color: var(--text-secondary)">Select players for the match</p>
+
+    <div v-if="error" class="error text-center mb-1">{{ error }}</div>
+    
     <div class="board-layout">
-      <select v-model="selectedPlayers[0]" class="selector top">
-        <option :value="null">Vacío</option>
-        <option v-for="player in players" :key="player.id" :value="player.id">{{ player.name }}</option>
-      </select>
-      <select v-model="selectedPlayers[1]" class="selector left">
-        <option :value="null">Vacío</option>
-        <option v-for="player in players" :key="player.id" :value="player.id">{{ player.name }}</option>
-      </select>
-      <select v-model="selectedPlayers[2]" class="selector bottom">
-        <option :value="null">Vacío</option>
-        <option v-for="player in players" :key="player.id" :value="player.id">{{ player.name }}</option>
-      </select>
-      <select v-model="selectedPlayers[3]" class="selector right">
-        <option :value="null">Vacío</option>
-        <option v-for="player in players" :key="player.id" :value="player.id">{{ player.name }}</option>
-      </select>
+      <!-- Top -->
+      <div class="player-slot top">
+        <label>Player 1</label>
+        <select v-model="selectedPlayers[0]" class="glass-select">
+          <option :value="null">Empty</option>
+          <option v-for="player in players" :key="player.id" :value="player.id">{{ player.displayName }}</option>
+        </select>
+      </div>
+
+      <!-- Left -->
+      <div class="player-slot left">
+        <label>Player 2</label>
+        <select v-model="selectedPlayers[1]" class="glass-select">
+          <option :value="null">Empty</option>
+          <option v-for="player in players" :key="player.id" :value="player.id">{{ player.displayName }}</option>
+        </select>
+      </div>
+
+      <!-- Center (Visual) -->
+      <div class="center-visual">
+        <div class="table-visual"></div>
+      </div>
+
+      <!-- Right -->
+      <div class="player-slot right">
+        <label>Player 4</label>
+        <select v-model="selectedPlayers[3]" class="glass-select">
+          <option :value="null">Empty</option>
+          <option v-for="player in players" :key="player.id" :value="player.id">{{ player.displayName }}</option>
+        </select>
+      </div>
+
+      <!-- Bottom -->
+      <div class="player-slot bottom">
+        <label>Player 3</label>
+        <select v-model="selectedPlayers[2]" class="glass-select">
+          <option :value="null">Empty</option>
+          <option v-for="player in players" :key="player.id" :value="player.id">{{ player.displayName }}</option>
+        </select>
+      </div>
     </div>
-    <button @click="createGame">Crear partida</button>
+
+    <div class="actions mt-2">
+      <button @click="createGame" class="btn-primary">Start Game</button>
+    </div>
   </div>
 </template>
 
@@ -42,9 +72,45 @@ onMounted(async () => {
     const resPlayers = await fetch(`${API}/players/`, {
       headers: { Authorization: `Bearer ${token}` }
     })
-    if (!resPlayers.ok) throw new Error('No se pudieron cargar los jugadores')
+    if (!resPlayers.ok) throw new Error('Could not load players')
     const rawPlayers = await resPlayers.json()
-    players.value = rawPlayers.filter(p => p.game_id === 2 || p.game_id === null)
+    
+    // Obtener usuario actual
+    let currentUserName = null
+    try {
+      const resMe = await fetch(`${API}/me?token=${token}`)
+      if (resMe.ok) {
+        const dataMe = await resMe.json()
+        currentUserName = dataMe.name
+      }
+    } catch (e) {
+      console.error("Error fetching current user", e)
+    }
+
+    const allowedAI = {
+      'AzulZero_RandomPlus': 'Fácil',
+      'MinMax_low': 'Medio',
+      'MinMax_high': 'Difícil'
+    }
+
+    players.value = rawPlayers
+      .filter(p => p.game_id === 2 || p.game_id === null)
+      .filter(p => p.type !== 'ai' || Object.keys(allowedAI).includes(p.name))
+      .map(p => {
+        let newName = p.name
+        if (p.type === 'ai' && allowedAI[p.name]) {
+          newName = allowedAI[p.name]
+        }
+        
+        let displayName = newName
+        if (p.type === 'ai') {
+          displayName = `${newName} (IA)`
+        } else if (currentUserName && p.name === currentUserName) {
+          displayName = `${newName} (tú)`
+        }
+
+        return { ...p, name: newName, displayName }
+      })
   } catch (e) {
     console.error(e)
     error.value = e.message
@@ -54,7 +120,7 @@ async function createGame() {
   error.value = null
   const selected = selectedPlayers.value.filter(p => p !== null)
   if (selected.length < 2) {
-    error.value = "Debes seleccionar al menos 2 jugadores para Azul."
+    error.value = "Select at least 2 players."
     return
   }
 
@@ -66,6 +132,8 @@ async function createGame() {
       name: jugador?.name
     }
   })
+
+
 
   const payload = {
     game_name: 'azul',
@@ -96,9 +164,12 @@ async function createGame() {
 </script>
 
 <style scoped>
-.azul-config {
-  text-align: center;
+.config-container {
+  max-width: 800px;
+  margin: 2rem auto;
+  padding: 3rem;
 }
+
 .board-layout {
   display: grid;
   grid-template-areas:
@@ -107,24 +178,70 @@ async function createGame() {
     ".   bottom   .";
   grid-template-columns: 1fr auto 1fr;
   grid-template-rows: auto auto auto;
-  gap: 1em;
+  gap: 2rem;
   justify-items: center;
   align-items: center;
+  margin-top: 2rem;
 }
-.selector.top {
-  grid-area: top;
+
+.player-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
 }
-.selector.left {
-  grid-area: left;
+
+.player-slot.top { grid-area: top; }
+.player-slot.left { grid-area: left; }
+.player-slot.right { grid-area: right; }
+.player-slot.bottom { grid-area: bottom; }
+
+.center-visual {
+  grid-area: center;
+  width: 100px;
+  height: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-.selector.right {
-  grid-area: right;
+
+.table-visual {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--primary), transparent);
+  opacity: 0.2;
+  box-shadow: 0 0 20px var(--primary);
 }
-.selector.bottom {
-  grid-area: bottom;
+
+.glass-select {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border-light);
+  color: white;
+  padding: 0.5rem;
+  border-radius: var(--radius-sm);
+  min-width: 150px;
+  text-align: center;
+  outline: none;
 }
+
+.glass-select:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-glow);
+}
+
+.glass-select option {
+  background: var(--bg-dark);
+  color: white;
+}
+
+.actions {
+  display: flex;
+  justify-content: center;
+  margin-top: 3rem;
+}
+
 .error {
-  color: red;
-  margin-bottom: 1em;
+  color: #ef4444;
 }
 </style>
