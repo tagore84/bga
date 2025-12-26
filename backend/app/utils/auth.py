@@ -5,6 +5,7 @@ from jose import JWTError, jwt
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from typing import Optional
 
 from app.models.player import Player
 
@@ -27,7 +28,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
 
-async def get_player_by_name(db: AsyncSession, name: str) -> Player | None:
+async def get_player_by_name(db: AsyncSession, name: str) -> Optional[Player]:
     """
     Devuelve la instancia Player cuyo name coincida, o None si no existe.
     """
@@ -35,7 +36,7 @@ async def get_player_by_name(db: AsyncSession, name: str) -> Player | None:
     return result.scalar_one_or_none()
 
 
-def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     """
     Crea un JWT con los datos dados y tiempo de expiración opcional.
     """

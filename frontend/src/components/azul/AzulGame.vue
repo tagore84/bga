@@ -370,7 +370,7 @@ function isAiTurn() {
     // and gameState.turno_actual is Name (or ID converted to name).
     // Let's find the player object by name
     const p = Object.values(gameState.value.jugadores).find(j => j.name === currentName || j.id === currentName)
-    return p && p.type === 'ai'
+    return p && (p.type === 'ai' || p.type === 'azul_deep_mcts')
 }
 
 watch(() => gameState.value?.turno_actual, async (newTurn) => {

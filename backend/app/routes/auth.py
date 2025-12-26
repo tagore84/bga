@@ -22,7 +22,7 @@ from app.utils.auth import (
 
 router = APIRouter(tags=["auth"])
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 # Pydantic schemas
 typing_union = None  # placeholder to satisfy code pattern
@@ -96,20 +96,6 @@ async def login(
 # Obtener datos del usuario autenticado
 @router.get("/me")
 async def me(
-    token: str,
-    db: AsyncSession = Depends(get_db)
+    current_player: Player = Depends(get_current_player)
 ):
-    try:
-        payload = decode_access_token(token)
-        name = payload.get("sub")
-        if not name:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
-        result = await db.execute(select(Player).where(Player.name == name))
-        player = result.scalar_one_or_none()
-        if not player:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Player not found")
-        return {"name": player.name}
-    except HTTPException:
-        raise
-    except Exception:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+    return {"id": current_player.id, "name": current_player.name}

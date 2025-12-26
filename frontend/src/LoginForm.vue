@@ -27,7 +27,7 @@
   
   <script setup>
   import { ref } from 'vue'
-  import { defineEmits } from 'vue'
+
   const emit = defineEmits(['login-success', 'signup-success'])  
   
   const name = ref('')
@@ -40,7 +40,7 @@
   
   const login = async () => {
     try {
-      const loginRes = await fetch(`${API_BASE}/login`, {
+      const loginRes = await fetch(`${API_BASE}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: name.value, password: password.value })
@@ -48,7 +48,9 @@
       if (!loginRes.ok) throw new Error('Invalid credentials') // More professional message
       const data = await loginRes.json()
       localStorage.setItem('token', data.access_token)
-      const meRes = await fetch(`http://localhost:8000/me?token=${data.access_token}`)
+      const meRes = await fetch(`${API_BASE}/auth/me`, {
+          headers: { 'Authorization': `Bearer ${data.access_token}` }
+      })
       const user = await meRes.json()
       emit('login-success', { token: data.access_token, name: user.name })
       // Removed alert for smoother experience

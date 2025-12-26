@@ -10,3 +10,5 @@ fastapi[all]
 gym
 gymnasium
 torch
+chess
+greenlet

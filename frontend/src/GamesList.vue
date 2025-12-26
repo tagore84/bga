@@ -42,6 +42,7 @@ const API_BASE = window.location.hostname === 'localhost'
 function getGameIcon(name) {
   if (name === 'tictactoe') return '⭕❌'
   if (name === 'azul') return '💠'
+  if (name === 'chess') return '♟️'
   return '🎮'
 }
 
@@ -73,6 +74,8 @@ function selectGame(game) {
     router.push('/tictactoeActive')
   } else if (game.name === 'azul') {
     router.push('/azulActive')
+  } else if (game.name === 'chess') {
+    router.push('/chessActive')
   } else {
     console.warn(`No config route defined for game ${game.name}`)
   }

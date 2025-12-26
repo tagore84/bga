@@ -78,7 +78,9 @@ onMounted(async () => {
     // Obtener usuario actual
     let currentUserName = null
     try {
-      const resMe = await fetch(`${API}/me?token=${token}`)
+      const resMe = await fetch(`${API}/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
       if (resMe.ok) {
         const dataMe = await resMe.json()
         currentUserName = dataMe.name
@@ -90,7 +92,8 @@ onMounted(async () => {
     const allowedAI = {
       'AzulZero_RandomPlus': 'Fácil',
       'MinMax_low': 'Medio',
-      'MinMax_high': 'Difícil'
+      'MinMax_high': 'Difícil',
+      'Experimental': 'Experimental'
     }
 
     players.value = rawPlayers
@@ -126,9 +129,17 @@ async function createGame() {
 
   const participantes = selected.map(id => {
     const jugador = players.value.find(p => p.id === id)
+    let pType = jugador?.type || 'human'
+    
+    // Fix: If it's the DeepMCTS player (Experimental), set the specific type
+    // so the frontend knows to enable Neural Vision.
+    if (jugador?.name === 'Experimental') {
+      pType = 'azul_deep_mcts'
+    }
+
     return {
       id,
-      type: jugador?.type || 'human',
+      type: pType,
       name: jugador?.name
     }
   })

@@ -13,6 +13,7 @@ from app.routes.auth import router as auth_router
 from app.routes.tictactoe.tictactoe import router as ttt_router
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.routes.azul.azul import router as azul_router
+from app.routes.chess.chess import router as chess_router
 
 
 app = FastAPI()
@@ -26,11 +27,12 @@ app.add_middleware(
 )
 
 # Ahora monta tus routers (auth y tictactoe)
-app.include_router(auth_router)
+app.include_router(auth_router, prefix="/auth")
 app.include_router(ttt_router)
 app.include_router(players_router)
 app.include_router(games_router, prefix="/games", tags=["games"])
 app.include_router(azul_router, prefix="/azul", tags=["azul"])
+app.include_router(chess_router, prefix="/chess", tags=["chess"])
 
 
 @app.on_event("startup")
@@ -44,22 +46,28 @@ async def startup_event():
 
 
     # Inicializar pool de Redis
-    core_redis.redis_pool = redis_client.Redis(host="redis", port=6379, decode_responses=True)
+    import os
+    redis_host = os.getenv("REDIS_HOST", "redis")
+    core_redis.redis_pool = redis_client.Redis(host=redis_host, port=6379, decode_responses=True)
     # 1) Crear todas las tablas
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
     # 2) Sembrar Juegos e IA por defecto usando una sesión
-    from app.core.seed import seed_ai_players
-    from app.core.seed import seed_games
+    # 2) Sembrar Juegos e IA por defecto usando una sesión
+    from app.core.seed import seed_games, sync_ai_players, register_all_strategies
+    
+    # Register strategies (code)
+    register_all_strategies()
+
     async with AsyncSession(engine) as session:
         await seed_games(session)
-    async with AsyncSession(engine) as session:
-        await seed_ai_players(session)
+        # Sync AI players (DB)
+        await sync_ai_players(session)
 
-    # 3) Inicializar Redis pool
+    # 4) Inicializar Redis pool
     core_redis.redis_pool = redis_client.Redis(
-        host="redis", port=6379, decode_responses=True
+        host=redis_host, port=6379, decode_responses=True
     )
 
 @app.get("/")
@@ -136,5 +144,32 @@ async def websocket_azul(websocket: WebSocket, game_id: int):
     except WebSocketDisconnect:
         return
     
+# WebSocket para Chess
+@app.websocket("/ws/chess/{game_id}")
+async def websocket_chess(websocket: WebSocket, game_id: int):
+    """
+    Cada vez que haya un nuevo movimiento en Redis Stream 'chess:{game_id}',
+    lo reenviamos a los clientes conectados.
+    """
+    await websocket.accept()
+    import app.core.redis as core_redis
+    last_id = "$"
+    try:
+        while True:
+            entries = await core_redis.redis_pool.xread(
+                streams={f"chess:{game_id}": last_id},
+                block=30000,
+                count=10
+            )
+            if not entries:
+                continue
+            for _, msgs in entries:
+                for msg_id, payload in msgs:
+                    last_id = msg_id
+                    await websocket.send_text(json.dumps(payload))
+    except WebSocketDisconnect:
+        return
+
+
 if __name__ == "__main__":
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)

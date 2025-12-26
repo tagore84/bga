@@ -1,9 +1,10 @@
 # backend/app/core/redis.py
 import redis.asyncio as aioredis
 import json
+from typing import Optional
 
 # Aquí se guardará el pool
-redis_pool: aioredis.Redis | None = None
+redis_pool: Optional[aioredis.Redis] = None
 
 async def publish_stream_event(stream_key: str, data: dict):
     if redis_pool is None:

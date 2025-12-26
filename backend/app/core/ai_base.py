@@ -24,3 +24,5 @@ import app.core.tictactoe.ai_tictactoe_random
 import app.core.azul.ai_azul_random
 import app.core.azul.ai_zero
 import app.core.azul.heuristic_min_max_mcts_adapter
+import app.core.chess.ai_chess_random
+import app.core.chess.ai_chess_minimax

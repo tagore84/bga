@@ -9,6 +9,9 @@ import AzulConfig from './components/azul/AzulConfig.vue'
 import TicTacToeActiveGames from './components/tictactoe/TicTacToeActiveGames.vue'
 import AzulActiveGames from './components/azul/AzulActiveGames.vue'
 import AzulGame from './components/azul/AzulGame.vue'
+import ChessConfig from './components/chess/ChessConfig.vue'
+import ChessActiveGames from './components/chess/ChessActiveGames.vue'
+import ChessGame from './components/chess/ChessGame.vue'
 import ErrorPage from './Error.vue'
 
 const routes = [
@@ -22,6 +25,9 @@ const routes = [
   { path: '/azulConfig', component: AzulConfig, meta: { requiresAuth: true } },
   { path: '/azulActive', component: AzulActiveGames, meta: { requiresAuth: true } },
   { path: '/azul/:id', component: AzulGame, meta: { requiresAuth: true } },
+  { path: '/chessConfig', component: ChessConfig, meta: { requiresAuth: true } },
+  { path: '/chessActive', component: ChessActiveGames, meta: { requiresAuth: true } },
+  { path: '/chess/:id', component: ChessGame, meta: { requiresAuth: true } },
   { path: '/error', component: ErrorPage },
   { path: '/:pathMatch(.*)*', redirect: '/error' }
 ]

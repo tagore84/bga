@@ -213,7 +213,7 @@ async def visualize_ai(game_id: int, db: AsyncSession = Depends(get_db)):
     current_player_id = state.turno_actual
     player_info = state.jugadores.get(current_player_id)
     
-    if not player_info or player_info.type != "ai":
+    if not player_info or (player_info.type != "ai" and player_info.type != "azul_deep_mcts"):
         raise HTTPException(status_code=400, detail="El jugador actual no es una IA")
         
     ai_wrapper = get_ai(player_info.name)
@@ -246,7 +246,7 @@ async def process_ai_turns(game_id: int, partida: AzulGame, state: AzulGameState
             
         siguiente_jugador = state.turno_actual
         jugador_info = state.jugadores.get(siguiente_jugador)
-        if not jugador_info or jugador_info.type != "ai":
+        if not jugador_info or (jugador_info.type != "ai" and jugador_info.type != "azul_deep_mcts"):
             break
 
         from app.core.ai_base import get_ai  # Asegúrate de tener este helper

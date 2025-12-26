@@ -20,7 +20,7 @@
   
   <script setup>
   import { ref } from 'vue'
-  import { defineEmits } from 'vue'
+
   const emit = defineEmits(['login-success', 'signup-success'])
   
   const name = ref('')
@@ -33,7 +33,7 @@
   
   const signup = async () => {
     try {
-      const signupRes = await fetch(`${API_BASE}/signup`, {
+      const signupRes = await fetch(`${API_BASE}/auth/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: name.value, password: password.value })
@@ -42,7 +42,9 @@
       const data = await signupRes.json()
       localStorage.setItem('token', data.access_token)
       //router.push('/games')
-      const meRes = await fetch(`${API_BASE}/me?token=${data.access_token}`)
+      const meRes = await fetch(`${API_BASE}/auth/me`, {
+        headers: { Authorization: `Bearer ${data.access_token}` }
+      })
       const user = await meRes.json()
       emit('login-success', { token: data.access_token, name: user.name })
       // Removed alert

@@ -6,6 +6,8 @@ import numpy as np
 
 # Import from the correct location (Phase 3 architecture)
 from app.core.azul.zero.deep_mcts_player import DeepMCTSPlayer
+from app.core.azul.adapter import bga_state_to_azul_zero_obs
+from app.models.azul.azul import AzulMove, Color
 
 class AIAzulDeepMCTS(AIBase):
     def __init__(self, model_path: str, device: str = None, mcts_iters: int = 1, cpuct: float = 0):
@@ -18,22 +20,41 @@ class AIAzulDeepMCTS(AIBase):
         self.player = DeepMCTSPlayer(model_path, device=device, mcts_iters=mcts_iters, cpuct=cpuct)
         print(f"AIAzulDeepMCTS loaded model from {model_path} on {device}")
 
-    def select_move(self, state: Dict[str, Any]) -> int:
+    def select_move(self, state: Any) -> AzulMove:
         """
         Convierte el estado del juego al formato esperado por el modelo
-        y devuelve un entero codificado que represente la acción.
+        y devuelve una AzulMove.
         """
+        # Convert BGA state to AzulZero observation
+        obs, _ = bga_state_to_azul_zero_obs(state)
+        
         # DeepMCTSPlayer.predict expects a dict and returns a tuple (source, color, dest)
-        action = self.player.predict(state)
-        return self.encode_action(action)
+        action = self.player.predict(obs)
+        
+        return self._action_to_move(action, state)
 
-    def encode_action(self, action: tuple) -> int:
-        """
-        Codifica una acción (source_idx, color, dest) como un entero único.
-        """
+    def _action_to_move(self, action: tuple, state) -> AzulMove:
         source_idx, color, dest = action
-        return source_idx * 30 + color * 5 + dest
-    
+        
+        # Map source_idx to factory ID or "centro"
+        # Note: state might be a dict or valid object depending on context, 
+        # but usually it's AzulGameState here.
+        # AzulGameState has 'expositores' (list of lists).
+        num_factories = len(state.expositores)
+        
+        if source_idx < num_factories:
+            factory_val = str(source_idx)
+        else:
+            factory_val = "centro"
+            
+        # Map dest to row (1-5) or 0 (floor)
+        if dest == 5:
+            row_val = 0
+        else:
+            row_val = dest + 1
+            
+        return AzulMove(factory=factory_val, color=Color(color), row=row_val)
+
 # Register with a default model path (can be updated)
 # Note: Ensure 'modelos/checkpoint_best.pth' exists or update this path
 import os
@@ -41,5 +62,6 @@ model_path = os.path.join(os.path.dirname(__file__), "zero/models/best.pt")
 # Check if model exists before registering to avoid crash if missing
 if os.path.exists(model_path):
     register_ai("azul_deep_mcts", AIAzulDeepMCTS(model_path))
+    register_ai("Experimental", AIAzulDeepMCTS(model_path))
 else:
     print(f"Warning: Model not found at {model_path}. AIAzulDeepMCTS not registered.")

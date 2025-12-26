@@ -4,7 +4,10 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 # URL de conexión a PostgreSQL en modo async con asyncpg
-SQLALCHEMY_DATABASE_URL = "postgresql+asyncpg://bga:secret@db:5432/bga"
+import os
+
+db_host = os.getenv("DB_HOST", "db")
+SQLALCHEMY_DATABASE_URL = f"postgresql+asyncpg://bga:secret@{db_host}:5432/bga"
 
 
 # Crear el motor asíncrono

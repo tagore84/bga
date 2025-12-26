@@ -11,7 +11,7 @@ from mcts.mcts import MCTS
 from .base_player import BasePlayer
 
 class DeepMCTSPlayer(BasePlayer):
-    def __init__(self, model_path, device='cpu', mcts_iters=250, cpuct=1.0, single_player_mode=True):
+    def __init__(self, model_path, device='cpu', mcts_iters=300, cpuct=1.0, single_player_mode=True):
         super().__init__()
         self.device = torch.device(device)
         # Load checkpoint and extract model state
@@ -32,7 +32,8 @@ class DeepMCTSPlayer(BasePlayer):
         env = AzulEnv()
         obs_flat = env.encode_observation(env.reset(initial=True))
         total_obs_size = obs_flat.shape[0]
-        spatial_size = env.num_players * 2 * 5 * 5
+        # Updated for 20-channel input
+        spatial_size = in_channels * 5 * 5
         factories_size = (env.N + 1) * 5
         global_size = total_obs_size - spatial_size - factories_size
         action_size = env.action_size
@@ -140,7 +141,10 @@ class DeepMCTSPlayer(BasePlayer):
 
         # 3. Saliency
         # Spatial: Separate channels
-        # Order in encode_observation: [P0_Pattern, P1_Pattern, P0_Wall, P1_Wall] (for 2 players)
+        # Structure of new 20-channel input:
+        # P0 Pattern (5), P1 Pattern (5), P0 Wall (5), P1 Wall (5)
+        # We want to aggregate these back to 4 maps for visualization
+        
         spatial_size = self.net.in_channels * 5 * 5
         spatial_flat = obs_flat[:spatial_size]
         spatial_reshaped = spatial_flat.reshape(self.net.in_channels, 5, 5)
@@ -148,17 +152,31 @@ class DeepMCTSPlayer(BasePlayer):
         spatial_breakdown = []
         labels = ["Red (Network) Pattern", "Rival Pattern", "Red (Network) Wall", "Rival Wall"]
         
-        # Ensure we don't crash if different channels
-        for c in range(min(len(labels), self.net.in_channels)):
-            heatmap = spatial_reshaped[c]
-            # Normalize per map if max > 0
-            if heatmap.max() > 0:
-                heatmap = heatmap / heatmap.max()
-            spatial_breakdown.append({
-                "label": labels[c],
-                "map": heatmap.tolist()
-            })
+        # Aggregate 5 channels per feature
+        for i, label in enumerate(labels):
+            # i=0 -> channels 0-4 (P0 Pattern)
+            # i=1 -> channels 5-9 (P1 Pattern)
+            # i=2 -> channels 10-14 (P0 Wall)
+            # i=3 -> channels 15-19 (P1 Wall)
             
+            start_c = i * 5
+            end_c = start_c + 5
+            
+            if end_c <= self.net.in_channels:
+                # Sum across the 5 color channels to get a single density map
+                heatmap = np.sum(spatial_reshaped[start_c:end_c], axis=0)
+                
+                # Normalize per map if max > 0
+                if heatmap.max() > 0:
+                    heatmap = heatmap / heatmap.max()
+                spatial_breakdown.append({
+                    "label": label,
+                    "map": heatmap.tolist()
+                })
+        
+        # Legacy spatial key (just use the first aggregated map or empty)
+        legacy_spatial = spatial_breakdown[0]["map"] if spatial_breakdown else []
+
         # Factories: Input counts
         fact_size = (env.N + 1) * 5
         fact_flat = obs_flat[spatial_size : spatial_size + fact_size]
@@ -168,6 +186,20 @@ class DeepMCTSPlayer(BasePlayer):
         glob_flat = obs_flat[spatial_size + fact_size:]
         glob_viz = glob_flat.tolist()
         
+        # Global Labels Updated for new structure
+        # Bag (5), Discard (5), FirstPlayer (1), Round One-Hot (8), Floors (14), Scores (2), Bonuses (6), Remaining (5)
+        global_labels = (
+            ["Bag"] * 5 + 
+            ["Discard"] * 5 + 
+            ["FirstPlayer"] + 
+            [f"Round {i+1}" for i in range(8)] +
+            ["Red Floor"] * 7 + ["Rival Floor"] * 7 +
+            ["Red Score", "Rival Score"] + 
+            ["Red Rows", "Red Cols", "Red Colors"] + 
+            ["Rival Rows", "Rival Cols", "Rival Colors"] + 
+            ["Rem Bag", "Rem Disc", "Rem Fac", "Rem Cen", "Rem Total"]
+        )
+
         return {
             "network_choice": {
                 "value_pred": value_pred,
@@ -175,11 +207,10 @@ class DeepMCTSPlayer(BasePlayer):
                 "raw": { "action_idx": raw_idx, "action_desc": fmt_act(raw_idx) }
             },
             "saliency": {
-                # Legacy keys kept for safety, but we use breakdown now
-                "spatial": spatial_reshaped[0].tolist(), 
+                "spatial": legacy_spatial, 
                 "spatial_breakdown": spatial_breakdown,
                 "factories": fact_viz,
                 "global": glob_viz,
-                "global_labels": ["Bag", "Discard", "FirstPlayer"] + [f"Red Floor", "Rival Floor"] + [f"Red Score", "Rival Score"]
+                "global_labels": global_labels
             }
         }
