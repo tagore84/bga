@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 from app.core.ai_base import get_ai
 from app.core.chess.ai_chess_minimax import MinimaxChessAI
-
+from sqlalchemy.orm.attributes import flag_modified
 
 # Strategies are registered in main.py via seed.register_all_strategies()
 
@@ -119,12 +119,25 @@ async def create_game(
     p_black = req.black_player_id
 
     # Create Game
+    game_config = req.dict()
+    game_config["moves"] = []
+    
+    # Ensure opponent_type is preserved
+    if not game_config.get("opponent_type"):
+        # Infer from players
+        p1 = await db.get(Player, p_white) if p_white else None
+        p2 = await db.get(Player, p_black) if p_black else None
+        if (p1 and p1.type == "ai") or (p2 and p2.type == "ai"):
+            game_config["opponent_type"] = "ai"
+        else:
+            game_config["opponent_type"] = "human"
+
     game_name = req.game_name or f"Chess {datetime.utcnow().strftime('%Y-%m-%d %H:%M')}"
     new_game = ChessGame(
         board_fen=chess.Board().fen(),
         current_turn="white", # python-chess uses boolean, we map to string
         status="in_progress",
-        config={**req.dict(), "moves": []},
+        config=game_config,
         game_name=game_name,
         player_white=p_white,
         player_black=p_black,
@@ -241,6 +254,7 @@ async def process_ai_turns(game_id: int):
                 moves.append(ai_move_uci)
                 # Force update config since it's JSON
                 game.config = {**game.config, "moves": moves}
+                flag_modified(game, "config")
 
                 game.board_fen = board.fen()
                 game.current_turn = "white" if board.turn == chess.WHITE else "black"
@@ -290,12 +304,21 @@ async def undo_move(
 
     if not isinstance(game.config, dict):
         game.config = {}
-
+        
     moves = game.config.get("moves", [])
+    
     if not moves:
         raise HTTPException(400, "No moves to undo")
 
     opponent_type = game.config.get("opponent_type", "human")
+    
+    # Fallback: check player types if opponent_type says human but players might be AI
+    if opponent_type == "human":
+         w_player = await db.get(Player, game.player_white) if game.player_white else None
+         b_player = await db.get(Player, game.player_black) if game.player_black else None
+         if (w_player and w_player.type == "ai") or (b_player and b_player.type == "ai"):
+             opponent_type = "ai"
+
     undo_count = 1
     
     if opponent_type == "ai":
@@ -322,6 +345,7 @@ async def undo_move(
     game.current_turn = "white" if board.turn == chess.WHITE else "black"
     game.status = "in_progress"
     game.config = {**game.config, "moves": new_moves}
+    flag_modified(game, "config")
     
     db.add(game)
     await db.commit()
@@ -467,6 +491,7 @@ async def make_move(
     moves.append(req.move_uci)
     # Force update
     game.config = {**game.config, "moves": moves}
+    flag_modified(game, "config")
 
     game.board_fen = board.fen()
     game.current_turn = "white" if board.turn == chess.WHITE else "black"

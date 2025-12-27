@@ -90,9 +90,9 @@ onMounted(async () => {
     }
 
     const allowedAI = {
-      'AzulZero_RandomPlus': 'Fácil',
-      'MinMax_low': 'Medio',
-      'MinMax_high': 'Difícil',
+      'Fácil': 'Fácil',
+      'Medio': 'Medio',
+      'Difícil': 'Difícil',
       'Experimental': 'Experimental'
     }
 
@@ -113,6 +113,20 @@ onMounted(async () => {
         }
 
         return { ...p, name: newName, displayName }
+      })
+      .sort((a, b) => {
+        const getPriority = (p) => {
+          if (currentUserName && p.name === currentUserName) return 0
+          if (p.type !== 'ai') return 1
+          
+          // AI ordering based on mapped name (which is in p.name now)
+          if (p.name === 'Fácil') return 2
+          if (p.name === 'Medio') return 3
+          if (p.name === 'Difícil') return 4
+          if (p.name === 'Experimental') return 5
+          return 6
+        }
+        return getPriority(a) - getPriority(b)
       })
   } catch (e) {
     console.error(e)

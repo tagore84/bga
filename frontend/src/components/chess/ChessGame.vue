@@ -78,7 +78,10 @@
     </div>
     
     <div class="controls mt-2">
-        <button v-if="canUndo" class="btn-secondary mr-2" @click="undoMove">Undo Last Move</button>
+        <button v-if="canUndo" class="btn-undo" @click="undoMove">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-undo"><path d="M3 7v6h6"></path><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path></svg>
+            Undo Move
+        </button>
         <button class="btn-danger" @click="$router.push('/games')">Exit Game</button>
     </div>
   </div>
@@ -273,6 +276,11 @@ export default {
                      // Store last move for highlighting
                      if (data.move_uci) {
                         this.lastMove = this.uciToCoords(data.move_uci);
+                        
+                        // Update moves list so Undo becomes available immediately
+                        if (!this.game.config) this.game.config = {};
+                        if (!this.game.config.moves) this.game.config.moves = [];
+                        this.game.config.moves.push(data.move_uci);
                      }
 
                      this.selectedSquare = null; 
@@ -619,13 +627,42 @@ export default {
     border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
-.btn-danger {
+.controls {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
     margin-top: 1rem;
 }
 
-.btn-secondary {
-    margin-top: 1rem;
-    background-color: var(--secondary);
+.btn-danger {
+    margin-top: 0; /* Override */
+}
+
+.btn-undo {
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: var(--text-primary);
+    padding: 0.6rem 1.2rem;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 600;
+    font-size: 1rem;
+    transition: all 0.2s ease;
+}
+
+.btn-undo:hover {
+    background: rgba(255, 255, 255, 0.15);
+    box-shadow: 0 0 15px rgba(255, 255, 255, 0.1);
+    border-color: var(--text-primary);
+    transform: translateY(-2px);
+}
+
+.btn-undo svg {
+    width: 20px;
+    height: 20px;
 }
 
 .eval-bar-container {
