@@ -33,7 +33,7 @@ AZUL_MODEL_PATH = os.path.join(os.path.dirname(__file__), "azul", "zero", "model
 AZUL_MODEL_DEVICE = 'cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'
 
 # --- CONFIGURATION CONSTANTS ---
-RESET_DB_ON_STARTUP = False
+RESET_DB_ON_STARTUP = os.getenv("RESET_DB_ON_STARTUP", "False").lower() == "true"
 
 # --- GLOBAL AI CONFIGURATION ---
 # Centralized source of truth for all AI players in the platform.
@@ -130,16 +130,13 @@ async def sync_ai_players(db: AsyncSession):
     Ensures that for every AI in CONFIG, a player exists in the DB.
     Also updates descriptions if changed.
     """
-    if not RESET_DB_ON_STARTUP:
-        print("RESET_DB_ON_STARTUP is False. Skipping AI player reset and sync.")
-        return
-
-    print("Syncing AI Players to DB...")
-
-    # 1. Delete ALL existing games that involve AI players to avoid ForeignKeyViolation
-    # We first identify the AI players IDs
+    # Check existence
     result = await db.execute(select(Player.id).where(Player.type == PlayerType.ai))
     ai_ids = result.scalars().all()
+
+    if not RESET_DB_ON_STARTUP and ai_ids:
+        print(f"Found {len(ai_ids)} AI players and RESET_DB_ON_STARTUP is False. Skipping re-seed.")
+        return
 
     if ai_ids:
         print(f"Found {len(ai_ids)} existing AI players. Cleaning up dependent games...")
