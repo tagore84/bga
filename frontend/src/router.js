@@ -12,6 +12,9 @@ import AzulGame from './components/azul/AzulGame.vue'
 import ChessConfig from './components/chess/ChessConfig.vue'
 import ChessActiveGames from './components/chess/ChessActiveGames.vue'
 import ChessGame from './components/chess/ChessGame.vue'
+import Connect4Config from './components/connect4/Connect4Config.vue'
+import Connect4ActiveGames from './components/connect4/Connect4ActiveGames.vue'
+import Connect4Game from './components/connect4/Connect4Game.vue'
 import ErrorPage from './Error.vue'
 
 const routes = [
@@ -28,6 +31,9 @@ const routes = [
   { path: '/chessConfig', component: ChessConfig, meta: { requiresAuth: true } },
   { path: '/chessActive', component: ChessActiveGames, meta: { requiresAuth: true } },
   { path: '/chess/:id', component: ChessGame, meta: { requiresAuth: true } },
+  { path: '/connect4Config', component: Connect4Config, meta: { requiresAuth: true } },
+  { path: '/connect4Active', component: Connect4ActiveGames, meta: { requiresAuth: true } },
+  { path: '/connect4/:id', component: Connect4Game, meta: { requiresAuth: true } },
   { path: '/error', component: ErrorPage },
   { path: '/:pathMatch(.*)*', redirect: '/error' }
 ]

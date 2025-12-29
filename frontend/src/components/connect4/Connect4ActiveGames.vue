@@ -7,7 +7,7 @@
            Volver
          </button>
        </div>
-       <h2 class="page-title">Partidas de Ajedrez</h2>
+       <h2 class="page-title">Partidas de Conecta Cuatro</h2>
        <div class="right-action">
          <button @click="createNewGame" class="btn-primary">+ Nueva Partida</button>
        </div>
@@ -24,16 +24,16 @@
 
       <div v-else v-for="game in games" :key="game.id" class="glass-panel game-card">
         <div class="card-header">
-          <span class="game-id">{{ game.config.game_name || `Partida #${game.id}` }}</span>
-          <span class="turn-badge" :class="game.current_turn">Turno: {{ game.current_turn.toUpperCase() }}</span>
+          <span class="game-id">Partida #{{ game.id }}</span>
+          <span class="turn-badge" :class="game.current_turn.toLowerCase()">Turno: {{ game.current_turn === 'Red' ? 'ROJO' : 'AZUL' }}</span>
         </div>
         
         <div class="card-body">
              <div class="info-row">
-               <span>Blancas:</span> <strong class="white-player">♔ {{ game.white_player_name || 'Desconocido' }}</strong>
+               <span>Rojo (Inicia):</span> <strong class="red-player">🔴 {{ game.player_red_name || 'Desconocido' }}</strong>
              </div>
              <div class="info-row">
-               <span>Negras:</span> <strong class="black-player">♚ {{ game.black_player_name || 'Desconocido' }}</strong>
+               <span>Azul:</span> <strong class="blue-player">🔵 {{ game.player_blue_name || 'Desconocido' }}</strong>
              </div>
              <div class="info-row">
                <span>Estado:</span> <strong>{{ translateStatus(game.status) }}</strong>
@@ -52,41 +52,38 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import axios from 'axios'
+import { API_BASE } from '../../config'
 
 const router = useRouter()
 const games = ref([])
 const loading = ref(true)
 const error = ref(null)
 
-import { API_BASE } from '../../config'
-
-
-async function fetchGames() {
-  try {
-    const token = localStorage.getItem('token')
-    const res = await axios.get(`${API_BASE}/chess/`, {
-       headers: { Authorization: `Bearer ${token}` }
-    })
-    games.value = res.data
-  } catch (e) {
-    error.value = "Error cargando partidas"
-    console.error(e)
-  } finally {
-    loading.value = false
-  }
+async function fetchActiveGames() {
+    try {
+        const token = localStorage.getItem('token')
+        const res = await fetch(`${API_BASE}/connect4/`, {
+            headers: { Authorization: `Bearer ${token}` }
+        })
+        if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`)
+        games.value = await res.json()
+    } catch (e) {
+        error.value = e.message
+    } finally {
+        loading.value = false
+    }
 }
 
 function joinGame(id) {
-  router.push(`/chess/${id}`)
+    router.push(`/connect4/${id}`)
 }
 
 function goBack() {
-  router.push('/games')
+    router.push('/games')
 }
 
 function createNewGame() {
-  router.push('/chessConfig')
+    router.push('/connect4Config')
 }
 
 async function deleteGame(id) {
@@ -95,16 +92,26 @@ async function deleteGame(id) {
   }
   
   try {
-    const token = localStorage.getItem('token')
-    await axios.delete(`${API_BASE}/chess/${id}`, {
-      headers: { Authorization: `Bearer ${token}` }
+    const res = await fetch(`${API_BASE}/connect4/${id}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      }
     })
     
-    // Refresh list
-    await fetchGames()
+    if (!res.ok) {
+        try {
+            const err = await res.json();
+            throw new Error(err.detail || res.statusText);
+        } catch(e) {
+             throw new Error(`HTTP ${res.status}`);
+        }
+    }
+    
+    // Refresh the list after deletion
+    await fetchActiveGames()
   } catch (e) {
     alert(`Error al eliminar la partida: ${e.message}`)
-    console.error(e)
   }
 }
 
@@ -121,7 +128,7 @@ function translateStatus(status) {
     return STATUS_MAP[status] || status
 }
 
-onMounted(fetchGames)
+onMounted(fetchActiveGames)
 </script>
 
 <style scoped>
@@ -188,7 +195,7 @@ onMounted(fetchGames)
 /* Grid Layout */
 .games-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 1.5rem;
 }
 
@@ -240,8 +247,8 @@ onMounted(fetchGames)
   font-size: 0.8rem;
   font-weight: bold;
 }
-.turn-badge.white { background: #f0d9b5; color: #5c4033; }
-.turn-badge.black { background: #333; color: white; }
+.turn-badge.red { background: #ff6b6b; color: white; }
+.turn-badge.blue { background: #4dabf7; color: white; }
 
 .card-body {
   flex: 1;
@@ -258,8 +265,8 @@ onMounted(fetchGames)
   align-items: center;
 }
 
-.white-player { color: #e2e8f0; }
-.black-player { color: #94a3b8; }
+.red-player { color: #ff6b6b; }
+.blue-player { color: #4dabf7; }
 
 .card-actions {
   display: flex;
@@ -267,7 +274,6 @@ onMounted(fetchGames)
 }
 
 .full-width { flex: 1; }
-
 
 .btn-primary {
     background: linear-gradient(135deg, var(--primary), var(--primary-dark));

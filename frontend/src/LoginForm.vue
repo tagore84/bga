@@ -1,25 +1,25 @@
 <template>
     <div class="glass-panel login-container">
-      <h2 class="text-center mb-1">Welcome Back</h2>
-      <p class="text-center mb-2" style="color: var(--text-secondary)">Sign in to continue to BGA.</p>
+      <h2 class="text-center mb-1">Bienvenido</h2>
+      <p class="text-center mb-2" style="color: var(--text-secondary)">Inicia sesión para continuar.</p>
       
       <form @submit.prevent="login" class="form-grid">
         <div class="input-group">
-          <input v-model="name" placeholder="Username" required />
+          <input v-model="name" placeholder="Nombre de usuario" required />
         </div>
         <div class="input-group">
-          <input v-model="password" type="password" placeholder="Password" required />
+          <input v-model="password" type="password" placeholder="Contraseña" required />
         </div>
         
-        <button type="submit" class="btn-primary w-full mt-1">Sign In</button>
+        <button type="submit" class="btn-primary w-full mt-1">Entrar</button>
       </form>
       
       <div class="divider"></div>
 
       <!-- Enlace para ir a la pantalla de registro -->
       <p class="register-link text-center">
-        Don't have an account?
-        <router-link to="/signup">Create one</router-link>
+        ¿No tienes una cuenta?
+        <router-link to="/signup">Crea una</router-link>
       </p>
       <p v-if="error" class="error text-center">{{ error }}</p>
     </div>
@@ -44,7 +44,7 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: name.value, password: password.value })
       })
-      if (!loginRes.ok) throw new Error('Invalid credentials') // More professional message
+      if (!loginRes.ok) throw new Error('Credenciales inválidas') // More professional message
       const data = await loginRes.json()
       localStorage.setItem('token', data.access_token)
       const meRes = await fetch(`${API_BASE}/auth/me`, {

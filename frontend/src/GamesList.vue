@@ -1,8 +1,8 @@
 <template>
   <div class="games-container p-4">
     <div class="header-section text-center mb-2">
-      <h2>Available Games</h2>
-      <p style="color: var(--text-secondary)">Select a game to start playing</p>
+      <h2>Juegos Disponibles</h2>
+      <p style="color: var(--text-secondary)">Selecciona un juego para empezar</p>
     </div>
     
     <div class="games-grid">
@@ -12,7 +12,7 @@
             {{ getGameIcon(game.name) }}
           </div>
           <h3 class="game-title">{{ formatGameName(game.name) }}</h3>
-          <button @click="selectGame(game)" class="btn-primary w-full">Play Now</button>
+          <button @click="selectGame(game)" class="btn-primary w-full">Jugar</button>
         </div>
         
         <button 
@@ -42,6 +42,7 @@ function getGameIcon(name) {
   if (name === 'tictactoe') return '⭕❌'
   if (name === 'azul') return '💠'
   if (name === 'chess') return '♟️'
+  if (name === 'connect4') return '🔴'
   return '🎮'
 }
 
@@ -75,13 +76,15 @@ function selectGame(game) {
     router.push('/azulActive')
   } else if (game.name === 'chess') {
     router.push('/chessActive')
+  } else if (game.name === 'connect4') {
+    router.push('/connect4Active')
   } else {
     console.warn(`No config route defined for game ${game.name}`)
   }
 }
 
 async function deleteGame(gameId) {
-  if (!confirm('Are you sure you want to delete this test game?')) {
+  if (!confirm('¿Estás seguro de que quieres eliminar este juego de prueba?')) {
     return
   }
   
@@ -114,7 +117,7 @@ async function deleteGame(gameId) {
 
 .games-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  grid-template-columns: repeat(2, 1fr);
   gap: 1.5rem;
 }
 

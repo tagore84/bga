@@ -1,17 +1,17 @@
 <template>
     <div class="glass-panel signup-container">
-      <h2 class="text-center mb-1">Create Account</h2>
-      <p class="text-center mb-2" style="color: var(--text-secondary)">Join the community.</p>
+      <h2 class="text-center mb-1">Crear Cuenta</h2>
+      <p class="text-center mb-2" style="color: var(--text-secondary)">Únete a la comunidad.</p>
 
       <form @submit.prevent="signup" class="form-grid">
         <div class="input-group"> 
-          <input v-model="name" placeholder="Username" required />
+          <input v-model="name" placeholder="Nombre de usuario" required />
         </div>
         <div class="input-group">
-          <input v-model="password" type="password" placeholder="Password" required />
+          <input v-model="password" type="password" placeholder="Contraseña" required />
         </div>
         
-        <button type="submit" class="btn-primary w-full mt-1">Sign Up</button>
+        <button type="submit" class="btn-primary w-full mt-1">Registrarse</button>
       </form>
       
       <p v-if="error" class="error text-center">{{ error }}</p>
@@ -37,7 +37,7 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: name.value, password: password.value })
       })
-      if (!signupRes.ok) throw new Error('Registration failed')
+      if (!signupRes.ok) throw new Error('Error en el registro')
       const data = await signupRes.json()
       localStorage.setItem('token', data.access_token)
       //router.push('/games')

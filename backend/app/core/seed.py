@@ -14,6 +14,7 @@ from app.core.ai_base import register_ai
 from app.models.tictactoe.tictactoe import TicTacToeGame
 from app.models.chess.chess import ChessGame
 from app.models.azul.azul import AzulGame
+from app.models.connect4.connect4 import Connect4Game
 
 # Chess Strategies
 from app.core.chess.ai_chess_minimax import MinimaxChessAI
@@ -21,6 +22,9 @@ from app.core.chess.ai_chess_random import RandomChessAI
 
 # TicTacToe Strategies
 from app.core.tictactoe.ai_tictactoe_random import RandomTicTacToeAI
+
+# Connect4 Strategies
+from app.core.connect4.ai_connect4_random import RandomConnect4AI
 
 # Azul Strategies
 from app.core.azul.ai_azul_random import RandomAzulAI
@@ -52,6 +56,9 @@ def safe_instantiate(strategy_ws_func):
 AI_PLAYER_CONFIG = {
     "tictactoe": [
         {"name": "RandomTicTacToe", "description": "Elige movimientos válidos al azar", "strategy": RandomTicTacToeAI()}
+    ],
+    "connect4": [
+        {"name": "RandomConnect4", "description": "Elige movimientos válidos al azar", "strategy": RandomConnect4AI()}
     ],
     "azul": [
         {"name": "RandomAzul", "description": "Elige movimientos válidos al azar", "strategy": RandomAzulAI()},
@@ -101,7 +108,8 @@ async def seed_games(db: AsyncSession):
     juegos = [
         ("tictactoe", "Juego clásico de tres en raya"),
         ("azul", "Juego de losetas y patrones inspirado en el Palacio Real de Évora"),
-        ("chess", "Clásico Juego de Ajedrez")
+        ("chess", "Clásico Juego de Ajedrez"),
+        ("connect4", "Juego de estrategia vertical para conectar cuatro fichas")
     ]
     for name, description in juegos:
         result = await db.execute(select(Game).where(Game.name == name))
@@ -134,6 +142,7 @@ async def sync_ai_players(db: AsyncSession):
         # Cleanup logic (same as before)
         await db.execute(delete(TicTacToeGame).where(or_(TicTacToeGame.player_x.in_(ai_ids), TicTacToeGame.player_o.in_(ai_ids))))
         await db.execute(delete(ChessGame).where(or_(ChessGame.player_white.in_(ai_ids), ChessGame.player_black.in_(ai_ids))))
+        await db.execute(delete(Connect4Game).where(or_(Connect4Game.player_red.in_(ai_ids), Connect4Game.player_blue.in_(ai_ids))))
         await db.execute(delete(AzulGame)) # Clean Azul games just in case
         await db.commit()
 
