@@ -59,9 +59,8 @@ const games = ref([])
 const loading = ref(true)
 const error = ref(null)
 
-const API_BASE = window.location.hostname === 'localhost'
-  ? 'http://localhost:8000'
-  : 'http://backend:8000'
+import { API_BASE } from '../../config'
+
 
 async function fetchGames() {
   try {

@@ -38,58 +38,49 @@ RESET_DB_ON_STARTUP = os.getenv("RESET_DB_ON_STARTUP", "False").lower() == "true
 # --- GLOBAL AI CONFIGURATION ---
 # Centralized source of truth for all AI players in the platform.
 # Format: "game_name": [ { "name", "description", "strategy" (optional) } ]
+
+AI_PLAYER_CONFIG = {}
+
+def safe_instantiate(strategy_ws_func):
+    try:
+        return strategy_ws_func()
+    except Exception as e:
+        print(f"⚠️ Failed to instantiate AI strategy: {e}")
+        return None
+
+# Re-build config safely
 AI_PLAYER_CONFIG = {
     "tictactoe": [
-        {
-            "name": "RandomTicTacToe", 
-            "description": "Elige movimientos válidos al azar",
-            "strategy": RandomTicTacToeAI() 
-        }
+        {"name": "RandomTicTacToe", "description": "Elige movimientos válidos al azar", "strategy": RandomTicTacToeAI()}
     ],
     "azul": [
-        # Random
         {"name": "RandomAzul", "description": "Elige movimientos válidos al azar", "strategy": RandomAzulAI()},
         {"name": "Fácil", "description": "IA aleatoria mejorada (evita penalizaciones obvias)", "strategy": RandomPlusAdapter()},
-        
-        # DeepMCTS
-        {
-            "name": "Experimental", 
-            "description": "IA basada en AlphaZero (MCTS + Red Neuronal)", 
-            "strategy": AIAzulDeepMCTS(model_path=AZUL_MODEL_PATH, device=AZUL_MODEL_DEVICE, mcts_iters=300, cpuct=1.0)
-        },
-
-        # Heuristics
-        {"name": "Medio", "description": "Estrategia MinMax (Profundidad 2)", "strategy": HeuristicMinMaxMctsAdapter(strategy='minmax', depth=2)},
-        {"name": "Difícil", "description": "Estrategia MinMax (Profundidad 4)", "strategy": HeuristicMinMaxMctsAdapter(strategy='minmax', depth=4)},
     ],
     "chess": [
-        {
-            "name": "Muy Fácil (IA)",
-            "description": "IA Aleatoria (Random)",
-            "strategy": RandomChessAI()
-        },
-        {
-            "name": "Fácil (IA)",
-            "description": "IA Minimax (Profundidad 2)",
-            "strategy": MinimaxChessAI(depth=2)
-        },
-        {
-            "name": "Medio (IA)",
-            "description": "IA Minimax (Profundidad 3)",
-            "strategy": MinimaxChessAI(depth=3)
-        },
-        {
-            "name": "Difícil (IA)",
-            "description": "IA Minimax (Profundidad 4)",
-            "strategy": MinimaxChessAI(depth=4)
-        },
-        {
-            "name": "Extremo (IA)",
-            "description": "IA Minimax (Profundidad 5)",
-            "strategy": MinimaxChessAI(depth=5)
-        }
+         {"name": "Muy Fácil (IA)", "description": "IA Aleatoria (Random)", "strategy": RandomChessAI()},
+         {"name": "Fácil (IA)", "description": "IA Minimax (Profundidad 2)", "strategy": MinimaxChessAI(depth=2)},
+         {"name": "Medio (IA)", "description": "IA Minimax (Profundidad 3)", "strategy": MinimaxChessAI(depth=3)},
+         {"name": "Difícil (IA)", "description": "IA Minimax (Profundidad 4)", "strategy": MinimaxChessAI(depth=4)},
+         {"name": "Extremo (IA)", "description": "IA Minimax (Profundidad 5)", "strategy": MinimaxChessAI(depth=5)}
     ]
 }
+
+# Append experimental safely
+try:
+    exp_strategy = AIAzulDeepMCTS(model_path=AZUL_MODEL_PATH, device=AZUL_MODEL_DEVICE, mcts_iters=300, cpuct=1.0)
+    AI_PLAYER_CONFIG["azul"].append(
+        {"name": "Experimental", "description": "IA basada en AlphaZero (MCTS + Red Neuronal)", "strategy": exp_strategy}
+    )
+except Exception as e:
+    print(f"⚠️  Skipping Experimental AI (DeepMCTS): {e}")
+
+# Append Heuristics safely
+try:
+    AI_PLAYER_CONFIG["azul"].append({"name": "Medio", "description": "Estrategia MinMax (Profundidad 2)", "strategy": HeuristicMinMaxMctsAdapter(strategy='minmax', depth=2)})
+    AI_PLAYER_CONFIG["azul"].append({"name": "Difícil", "description": "Estrategia MinMax (Profundidad 4)", "strategy": HeuristicMinMaxMctsAdapter(strategy='minmax', depth=4)})
+except Exception as e:
+    print(f"⚠️  Skipping Heuristic AI: {e}")
 
 def register_all_strategies():
     """
@@ -130,49 +121,31 @@ async def sync_ai_players(db: AsyncSession):
     Ensures that for every AI in CONFIG, a player exists in the DB.
     Also updates descriptions if changed.
     """
-    # Check existence
+    # Check existence of any AI players
     result = await db.execute(select(Player.id).where(Player.type == PlayerType.ai))
     ai_ids = result.scalars().all()
 
-    if not RESET_DB_ON_STARTUP and ai_ids:
-        print(f"Found {len(ai_ids)} AI players and RESET_DB_ON_STARTUP is False. Skipping re-seed.")
-        return
-
-    if ai_ids:
-        print(f"Found {len(ai_ids)} existing AI players. Cleaning up dependent games...")
+    # If RESET is requested, or if we want to ensure we are clean, we delete.
+    # But since we want to be smart, if NOT reset, we try to append missing ones.
+    
+    if RESET_DB_ON_STARTUP and ai_ids:
+        print(f"RESET_DB_ON_STARTUP is True. Deleting {len(ai_ids)} existing AI players and dependent games...")
         
-        # TicTacToe: player_x or player_o in ai_ids
-        # We need to use explicit delete statements with where clauses
-        # DELETE FROM tictactoe_games WHERE player_x IN (...) OR player_o IN (...)
-        
-        # Using separate deletes for clarity and safety with SQLAlchemy async
+        # Cleanup logic (same as before)
         await db.execute(delete(TicTacToeGame).where(or_(TicTacToeGame.player_x.in_(ai_ids), TicTacToeGame.player_o.in_(ai_ids))))
-        
-        # Chess: same logic (player_white, player_black)
         await db.execute(delete(ChessGame).where(or_(ChessGame.player_white.in_(ai_ids), ChessGame.player_black.in_(ai_ids))))
-        
-        # Azul: tricky because players are in JSON 'state'. DOES NOT HAVE FK USUALLY.
-        # But if there are other games/tables with FKs to players, include them here.
-        # Assuming AzulGame doesn't have direct FK columns `player_id` that enforce constraint.
-        # If it does (e.g. simple link table?), we'd delete. 
-        # Checking AzulGame model... typically only stores 'state' JSON. 
-        # If no FK constraint exists for Azul, we skip. 
-        
-        # We MUST delete AzulGame records because they contain JSON state that references
-        # the old AI players (by name/ID) which we are about to delete.
-        await db.execute(delete(AzulGame))
-        
+        await db.execute(delete(AzulGame)) # Clean Azul games just in case
         await db.commit()
-        print("Dependent AI games deleted.")
 
-    # 2. Delete ALL existing AI players to ensure a clean slate
-    print("Deleting all existing AI players...")
-    await db.execute(delete(Player).where(Player.type == PlayerType.ai))
-    await db.commit()
-    print("All AI players deleted.")
+        await db.execute(delete(Player).where(Player.type == PlayerType.ai))
+        await db.commit()
+        print("All AI players deleted.")
+        ai_ids = [] # Reset list so we enter creation loop
+
+    # If NOT reset, we just proceed to check/create each one.
     
     for game_name, ais in AI_PLAYER_CONFIG.items():
-        # 1. Get Game ID
+        # Get Game ID
         result = await db.execute(select(Game).where(Game.name == game_name))
         game = result.scalar_one_or_none()
         
@@ -183,16 +156,30 @@ async def sync_ai_players(db: AsyncSession):
         game_id_val = game.id
             
         for ai_conf in ais:
-            # Create always, since we deleted everything
+            # Check if this specific AI player already exists
+            stmt = select(Player).where(
+                Player.name == ai_conf["name"],
+                Player.game_id == game_id_val,
+                Player.type == PlayerType.ai
+            )
+            result = await db.execute(stmt)
+            existing_ai = result.scalar_one_or_none()
+
+            if existing_ai:
+                # Update description if needed, or just skip
+                # print(f"[{game_name}] AI Player '{ai_conf['name']}' already exists. Skipping.")
+                continue
+
+            # Create if missing
             new_ai = Player(
                 name=ai_conf["name"],
                 description=ai_conf["description"],
                 game_id=game_id_val,
-                hashed_password=None, # It's an AI
+                hashed_password=None,
                 type=PlayerType.ai
             )
             db.add(new_ai)
             await db.commit()
-            print(f"[{game_name}] Created AI Player: {ai_conf['name']}")
+            print(f"[{game_name}] Created NEW AI Player: {ai_conf['name']}")
     
     print("AI Player Sync Complete.")

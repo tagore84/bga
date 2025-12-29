@@ -13,6 +13,8 @@ services:
         condition: service_healthy
     environment:
       - DATABASE_URL=postgresql://bga:secret@db:5432/bga
+    networks:
+      - bga_net
 
   redis:
     image: redis:6-alpine
@@ -24,6 +26,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
+    networks:
+      - bga_net
 
   db:
     image: postgres:14-alpine
@@ -33,7 +37,7 @@ services:
       POSTGRES_USER: bga
       POSTGRES_PASSWORD: secret
     ports:
-      - '5432:5432'
+      - '5433:5432' # Map host 5433 to container 5432 (avoid conflict with Synology Postgres)
     volumes:
       - ./db_data:/var/lib/postgresql/data # Persistence in local folder
     healthcheck:
@@ -41,11 +45,20 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
+    networks:
+      - bga_net
 
   frontend:
     build: ./frontend
     restart: unless-stopped
     ports:
-      - '3001:5173' # Map host 3001 to default Vite port 5173 (changed to avoid conflict with Grafana)
+      - '3001:5173' # Map host 3001 to default Vite port 5173 (Safe range to avoid conflicts)
+
     depends_on:
       - backend
+    networks:
+      - bga_net
+
+networks:
+  bga_net:
+    driver: bridge

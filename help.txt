@@ -1,3 +1,6 @@
+Zip -> Synology:
+zip -r bga-nas.zip . -x "*.git*" "*/node_modules/*" "*/.venv/*" "*/__pycache__/*"
+
 DOCKER_BUILDKIT=0 docker-compose up --build
 docker-compose -f docker-compose.yml up --build -d backend
 
@@ -9,6 +12,7 @@ docker exec -it bga-db-1 psql -U bga -d bga
 \dt
 DROP TABLE IF EXISTS tictactoe_games CASCADE;
 DROP TABLE IF EXISTS azul_games CASCADE;
+DROP TABLE IF EXISTS chess_games CASCADE;
 DROP TABLE IF EXISTS players CASCADE;
 DROP TABLE IF EXISTS games CASCADE;
 \q

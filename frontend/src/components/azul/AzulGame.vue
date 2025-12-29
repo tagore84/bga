@@ -769,9 +769,8 @@ function isSelected(factoryIndex, color) {
   return selectedFactory.value === factoryIndex && selectedColor.value === color
 }
 
-const API_BASE = window.location.hostname === 'localhost'
-? 'http://localhost:8000'
-: 'http://backend:8000'
+import { API_BASE } from '../../config'
+
 
 const route = useRoute()
 const router = useRouter()

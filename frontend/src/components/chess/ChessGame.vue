@@ -5,7 +5,7 @@
         <div v-if="game" class="status-bar text-center">
             Turn: <span :class="game.current_turn === 'white' ? 'text-primary' : 'text-secondary'">{{ game.current_turn === 'white' ? 'White' : 'Black' }}</span>
             <span v-if="game.status !== 'in_progress'" class="game-over"> | {{ game.status }}</span>
-            <span v-if="isCheck && game.status === 'in_progress'" class="text-danger font-bold ml-2"> | CHECK!</span>
+            <span v-if="isCheck && game.status === 'in_progress'" class="text-danger font-bold ml-2"> | JAQUE!</span>
         </div>
         
         <!-- Evaluation Bar -->
@@ -53,7 +53,8 @@
 
                          <!-- Highlight Markers -->
                          <div v-if="isLastMove(rank, file)" class="last-move-marker"></div>
-                         <div v-if="isValidMove(rank, file)" class="valid-move-marker"></div>
+                         <div v-if="getValidMoveType(rank, file) === 'quiet'" class="valid-move-marker"></div>
+                         <div v-if="getValidMoveType(rank, file) === 'capture'" class="valid-capture-marker"></div>
 
                         <!-- Piece -->
                         <div v-if="getPiece(rank, file)" 
@@ -78,6 +79,10 @@
     </div>
     
     <div class="controls mt-2">
+        <label class="toggle-container">
+            <input type="checkbox" v-model="showHints">
+            Mostrar posibles movimientos
+        </label>
         <button v-if="canUndo" class="btn-undo" @click="undoMove">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-undo"><path d="M3 7v6h6"></path><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path></svg>
             Undo Move
@@ -90,6 +95,8 @@
 <script>
 import axios from 'axios'
 import ChessPiece from './ChessPiece.vue'
+import { API_BASE, WS_BASE } from '../../config'
+import { Chess } from 'chess.js'
 
 export default {
     name: 'ChessGame',
@@ -107,7 +114,10 @@ export default {
             dragSource: null,
             lastMove: null, // {from: {r, f}, to: {r, f}}
             evaluation: 0.0,
-            isCheck: false
+            isCheck: false,
+            chessInstance: new Chess(),
+            showHints: false,
+            legalMoves: [] // List of legal moves for selected square
         }
     },
     computed: {
@@ -185,12 +195,6 @@ export default {
         },
         canUndo() {
             if (!this.game || !this.currentUser) return false;
-            // Only current turn player can undo? OR any player if configured?
-            // Requirement: "Solo lo pueden usar los humanos"
-            
-            // Assuming if I am a player in this game, and there are moves, I can try to undo?
-            // Usually you can only undo if it's your turn OR if you just played and want to take back.
-            // Let's allow it if I am a participant.
             
             const isParticipant = (this.currentUser.id === this.game.white_player_id || 
                                    this.currentUser.id === this.game.black_player_id);
@@ -216,7 +220,6 @@ export default {
              try {
                 const token = localStorage.getItem('token');
                 if (!token) return;
-                const API_BASE = window.location.hostname === 'localhost' ? 'http://localhost:8000' : 'http://backend:8000';
                 const res = await axios.get(`${API_BASE}/auth/me`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
@@ -228,13 +231,20 @@ export default {
         async fetchGame(id) {
             try {
                 const token = localStorage.getItem('token');
-                const API_BASE = window.location.hostname === 'localhost' ? 'http://localhost:8000' : 'http://backend:8000';
                 const res = await axios.get(`${API_BASE}/chess/${id}`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
                 this.game = res.data;
                 this.evaluation = this.game.evaluation || 0.0;
                 this.isCheck = this.game.is_check || false;
+                
+                // Sync chess.js
+                try {
+                    this.chessInstance.load(this.game.board_fen);
+                } catch (err) {
+                    console.error("Failed to load FEN into chess.js", err);
+                }
+                
                 this.parseFen(this.game.board_fen);
                 
                 // Restore last move
@@ -250,7 +260,6 @@ export default {
             }
         },
         connectWebSocket(gameId) {
-            const WS_BASE = window.location.hostname === 'localhost' ? 'ws://localhost:8000' : 'ws://backend:8000';
             this.ws = new WebSocket(`${WS_BASE}/ws/chess/${gameId}`);
             this.ws.onmessage = (event) => {
                 const data = JSON.parse(event.data);
@@ -260,8 +269,15 @@ export default {
                      // We should trust the server's next turn closer, but toggle logic is ok for simple sync
                      this.game.current_turn = data.by === 'white' ? 'black' : 'white'; 
                      this.game.status = data.status;
-                     this.parseFen(data.fen);
                      
+                     // Sync chess.js
+                     try {
+                        this.chessInstance.load(data.fen);
+                     } catch (err) {
+                        console.error("Failed to sync chess.js", err);
+                     }
+                     
+                     this.parseFen(data.fen);
                      
                      if (data.evaluation !== undefined) {
                         this.evaluation = parseFloat(data.evaluation);
@@ -284,13 +300,9 @@ export default {
                      }
 
                      this.selectedSquare = null; 
+                     this.legalMoves = [];
                 } else if (data.type === 'undo') {
                     this.game.board_fen = data.fen;
-                    // Reset turn logic? Server sends status but not current_turn explicitly in 'undo' event usually,
-                    // but we can infer or fetch.
-                    // Wait, my redis event for undo included 'fen' and 'status'.
-                    // I need current_turn too to be safe, or just refetch game?
-                    // Let's refetch game to be safe and simple.
                     this.fetchGame(gameId);
                 }
             };
@@ -354,9 +366,13 @@ export default {
             return (this.lastMove.from.r === rank && this.lastMove.from.f === file) ||
                    (this.lastMove.to.r === rank && this.lastMove.to.f === file);
         },
+        getValidMoveType(rank, file) {
+            if (!this.showHints) return null;
+            const move = this.legalMoves.find(m => m.r === rank && m.f === file);
+            return move ? (move.isCapture ? 'capture' : 'quiet') : null;
+        },
         isValidMove(rank, file) {
-            // Optional: Can add logic to hint valid moves for selected piece
-            return false; 
+             return !!this.getValidMoveType(rank, file);
         },
         toUCI(sq) {
             const files = "abcdefgh";
@@ -391,6 +407,28 @@ export default {
             
             return false;
         },
+        updateLegalMoves() {
+            if (!this.selectedSquare) {
+                this.legalMoves = [];
+                return;
+            }
+            // Get moves for the selected square
+            const fromSq = this.toUCI(this.selectedSquare).substring(0, 2); // e.g. "e2"
+            const moves = this.chessInstance.moves({
+                square: fromSq,
+                verbose: true
+            });
+            
+            // Map to coordinates {r, f}
+            this.legalMoves = moves.map(m => {
+                const target = m.to; // "e4"
+                const files = "abcdefgh";
+                const f = files.indexOf(target[0]) + 1;
+                const r = parseInt(target[1]);
+                const isCapture = m.flags.includes('c') || m.flags.includes('e');
+                return { r, f, isCapture };
+            });
+        },
         handleSquareClick(rank, file) {
             if (!this.canMove()) return;
 
@@ -401,11 +439,13 @@ export default {
                 // Deselect if clicking same
                 if (this.selectedSquare.r === rank && this.selectedSquare.f === file) {
                     this.selectedSquare = null;
+                    this.legalMoves = [];
                     return;
                 }
                 // Switch if clicking own
                 if (isOwnPiece) {
                     this.selectedSquare = {r: rank, f: file};
+                    this.updateLegalMoves();
                     return;
                 }
                 // Attempt Move
@@ -413,6 +453,7 @@ export default {
             } else {
                 if (isOwnPiece) {
                     this.selectedSquare = {r: rank, f: file};
+                    this.updateLegalMoves();
                 }
             }
         },
@@ -428,12 +469,14 @@ export default {
              }
              this.dragSource = {r: rank, f: file};
              this.selectedSquare = {r: rank, f: file};
+             this.updateLegalMoves();
         },
         handleDrop(rank, file) {
             if (this.dragSource) {
                  this.makeMove(this.dragSource, {r: rank, f: file});
                  this.dragSource = null;
                  this.selectedSquare = null;
+                 this.legalMoves = [];
             }
         },
         isOwnPiece(p) {
@@ -442,30 +485,54 @@ export default {
             return this.game.current_turn === 'white' ? isWhitePiece : !isWhitePiece;
         },
         async makeMove(from, to) {
-            let uci = this.toUCI(from) + this.toUCI(to);
-            const piece = this.getPiece(from.r, from.f);
-            const isWhitePawn = piece === 'P';
-            const isBlackPawn = piece === 'p';
-            if ((isWhitePawn && to.r === 8) || (isBlackPawn && to.r === 1)) {
-                uci += 'q'; 
+            // 1. Validation Logic
+            const fromSq = this.toUCI(from).substring(0, 2);
+            const toSq = this.toUCI(to).substring(0, 2);
+            
+            // Check with chess.js
+            // Note: We need to handle promotion. For simplicity, auto-queen if promotion available.
+            // chess.js move() handles validation.
+            
+            // We can check if move is in .moves({square: fromSq})
+            
+            const potentialMoves = this.chessInstance.moves({ verbose: true });
+            const moves = potentialMoves.filter(m => m.from === fromSq && m.to === toSq);
+            
+            if (moves.length === 0) {
+                // Illegal move - Snap back / Do nothing
+                console.warn("Illegal move attempted locally:", fromSq, toSq);
+                this.selectedSquare = null;
+                this.legalMoves = [];
+                return;
+            }
+
+            // Default to Queen promotion if multiple moves (promotion) available
+            let move = moves.find(m => m.promotion === 'q');
+            if (!move) move = moves[0];
+
+            // Construct UCI for backend
+            let finalUci = move.from + move.to;
+            if (move.promotion) {
+                finalUci += move.promotion;
             }
 
             try {
+                // Optimistic UI update could go here, but waiting for server is safer for now.
+                
                 const token = localStorage.getItem('token');
-                const API_BASE = window.location.hostname === 'localhost' ? 'http://localhost:8000' : 'http://backend:8000';
                 await axios.post(`${API_BASE}/chess/${this.game.id}/move`, 
-                    { move_uci: uci },
+                    { move_uci: finalUci },
                     { headers: { Authorization: `Bearer ${token}` } }
                 );
             } catch (e) {
                 console.error(e);
+                alert("Move failed: " + (e.response?.data?.detail || e.message));
             }
         },
         async undoMove() {
             if (!confirm("Are you sure you want to undo the last move?")) return;
             try {
                 const token = localStorage.getItem('token');
-                const API_BASE = window.location.hostname === 'localhost' ? 'http://localhost:8000' : 'http://backend:8000';
                 await axios.post(`${API_BASE}/chess/${this.game.id}/undo`, 
                     {},
                     { headers: { Authorization: `Bearer ${token}` } }
@@ -596,8 +663,20 @@ export default {
     box-shadow: inset 0 0 0 4px rgba(255, 255, 0, 0.8);
 }
 .square.in-check {
-    box-shadow: inset 0 0 0 4px rgba(255, 0, 0, 0.8), inset 0 0 20px rgba(255, 0, 0, 0.5);
-    background-color: rgba(255, 0, 0, 0.2) !important;
+    box-shadow: inset 0 0 0 3px #ff4444, inset 0 0 20px rgba(255, 0, 0, 0.6);
+    background-color: rgba(255, 0, 0, 0.15) !important;
+    animation: check-pulse 1.5s ease-in-out infinite alternate;
+}
+
+@keyframes check-pulse {
+    from {
+        box-shadow: inset 0 0 0 2px #ff4444, inset 0 0 10px rgba(255, 0, 0, 0.4);
+        background-color: rgba(255, 0, 0, 0.1);
+    }
+    to {
+        box-shadow: inset 0 0 0 5px #ff0000, inset 0 0 25px rgba(255, 0, 0, 0.7);
+        background-color: rgba(255, 0, 0, 0.25);
+    }
 }
 .last-move-marker {
     position: absolute;
@@ -605,6 +684,34 @@ export default {
     background-color: rgba(155, 199, 0, 0.4); /* Greenish highlight */
     pointer-events: none;
 }
+/* Valid Move Marker - Small dot */
+.valid-move-marker {
+    position: absolute;
+    width: 20%;
+    height: 20%;
+    background-color: rgba(0, 0, 0, 0.3);
+    border-radius: 50%;
+    pointer-events: none;
+}
+.square:hover .valid-move-marker {
+    background-color: rgba(0, 0, 0, 0.5);
+}
+
+/* Valid Capture Marker - Ring */
+.valid-capture-marker {
+    position: absolute;
+    width: 85%;
+    height: 85%;
+    border: 6px solid rgba(0, 0, 0, 0.3);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 15; /* Above piece (z-index 10) */
+}
+.square:hover .valid-capture-marker {
+    border-color: rgba(0, 0, 0, 0.5);
+    background-color: rgba(0,0,0,0.1);
+}
+
 
 .piece-container {
     width: 100%;
@@ -632,6 +739,8 @@ export default {
     gap: 1rem;
     justify-content: center;
     margin-top: 1rem;
+    flex-wrap: wrap;
+    align-items: center;
 }
 
 .btn-danger {
@@ -679,5 +788,14 @@ export default {
     height: 100%;
     background-color: #eee; /* White side */
     transition: width 0.5s ease-in-out;
+}
+
+.toggle-container {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-right: 1rem;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
 }
 </style>

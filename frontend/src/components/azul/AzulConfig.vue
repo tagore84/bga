@@ -49,6 +49,7 @@
     </div>
 
     <div class="actions mt-2">
+      <button @click="goBack" class="btn-secondary">Back</button>
       <button @click="createGame" class="btn-primary">Start Game</button>
     </div>
   </div>
@@ -64,12 +65,13 @@ const error = ref(null)
 const selectedPlayers = ref([null, null, null, null])
 
 
-const API = 'http://localhost:8000'
+import { API_BASE } from '../../config'
+
 
 onMounted(async () => {
   try {
     const token = localStorage.getItem('token')
-    const resPlayers = await fetch(`${API}/players/`, {
+    const resPlayers = await fetch(`${API_BASE}/players/`, {
       headers: { Authorization: `Bearer ${token}` }
     })
     if (!resPlayers.ok) throw new Error('Could not load players')
@@ -78,7 +80,7 @@ onMounted(async () => {
     // Obtener usuario actual
     let currentUserName = null
     try {
-      const resMe = await fetch(`${API}/auth/me`, {
+      const resMe = await fetch(`${API_BASE}/auth/me`, {
         headers: { Authorization: `Bearer ${token}` }
       })
       if (resMe.ok) {
@@ -133,6 +135,10 @@ onMounted(async () => {
     error.value = e.message
   }
 })
+function goBack() {
+  router.push('/games')
+}
+
 async function createGame() {
   error.value = null
   const selected = selectedPlayers.value.filter(p => p !== null)
@@ -167,7 +173,7 @@ async function createGame() {
 
   try {
     const token = localStorage.getItem('token')
-    const res = await fetch(`${API}/azul/`, {
+    const res = await fetch(`${API_BASE}/azul/`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -268,5 +274,20 @@ async function createGame() {
 
 .error {
   color: #ef4444;
+}
+
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: white;
+  padding: 0.8rem 2rem;
+  border-radius: 30px;
+  cursor: pointer;
+  margin-right: 1rem;
+  transition: all 0.2s;
+}
+
+.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.2);
 }
 </style>

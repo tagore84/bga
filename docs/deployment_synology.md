@@ -26,6 +26,9 @@ Before uploading, it is recommended to create a clean zip of the project excludi
 3.  Create a folder for the project, e.g., `/docker/bga`.
 4.  Upload `bga-nas.zip` to that folder.
 5.  Right-click the zip file and select **Extract Here**.
+6.  **Create the database folder:**
+    *   Inside `/docker/bga`, create a new empty folder named `db_data`.
+    *   *Important:* If you skip this, Docker might fail to start saying the path does not exist.
 
 ## Step 3: Configure Container Manager
 
@@ -57,8 +60,11 @@ Before uploading, it is recommended to create a clean zip of the project excludi
 
 ## Step 5: Access the App
 
--   **Frontend**: `http://<YOUR_NAS_IP>:3001`
+-   **Frontend**: `http://<YOUR_NAS_IP>:8085` (Changed to 8085 to avoid conflicts)
+
+
 -   **Backend**: `http://<YOUR_NAS_IP>:8000`
+-   **Database Access** (External): `postgres://bga:secret@<YOUR_NAS_IP>:5433/bga`
 
 ### Data Persistence
 The database files will be stored in a folder named `db_data` inside your project folder on the NAS. This ensures that your data remains safe even if you delete the containers or the project configuration. You can easily back up this folder.
@@ -68,3 +74,14 @@ The database files will be stored in a folder named `db_data` inside your projec
 To update the code:
 1.  Upload new files.
 2.  In Container Manager -> Project -> Select `bga` -> Action -> **Build** (or specific Rebuild option).
+
+## Troubleshooting & Clean Re-install
+
+If you encounter errors like *"driver failed programming external connectivity"* (Port conflict) or *"vite: not found"*, follow these steps to perform a **Clean Re-install**:
+
+1.  **Stop the Project**: In Container Manager, select the `bga` project and click **Stop**.
+2.  **Delete the Project**: Select the `bga` project and click **Delete**. (Select "Delete container images" if you want to force a full re-download, though usually not required).
+3.  **Clean Up (Optional)**: If you suspect deep conflicts, you can prune unused objects (via SSH `docker system prune`) but strictly deleting the project in the UI is usually enough to free the ports.
+4.  **Update Files**: Ensure you have uploaded the latest files (including `.dockerignore` and the new `docker-compose.yml` with port 3005).
+5.  **Re-create Project**: Follow **Step 3** again to create the project from scratch. This guarantees that old containers using port 3001 are removed and new ones use port 3005.
+

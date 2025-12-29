@@ -35,7 +35,8 @@ import { useRouter } from 'vue-router'
 const games = ref([])
 const router = useRouter()
 
-const API_BASE = `${window.location.protocol}//${window.location.hostname}:8000`
+import { API_BASE } from './config'
+
 
 function getGameIcon(name) {
   if (name === 'tictactoe') return '⭕❌'

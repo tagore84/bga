@@ -30,7 +30,10 @@
       </select>
     </div>
 
-    <button @click="createGame">Crear partida</button>
+    <div class="actions">
+      <button @click="goBack" class="secondary">Volver</button>
+      <button @click="createGame">Crear partida</button>
+    </div>
   </div>
 </template>
 
@@ -45,12 +48,13 @@ const error = ref(null)
 const playerX = ref(null)
 const playerO = ref(null)
 
-const API = 'http://localhost:8000'
+import { API_BASE } from '../../config'
+
 
 onMounted(async () => {
   try {
     const token = localStorage.getItem('token')
-    const resPlayers = await fetch(`${API}/players/`, {
+    const resPlayers = await fetch(`${API_BASE}/players/`, {
       headers: { Authorization: `Bearer ${token}` }
     })
     if (!resPlayers.ok) throw new Error('No se pudieron cargar los jugadores')
@@ -61,6 +65,10 @@ onMounted(async () => {
     error.value = e.message
   }
 })
+
+function goBack() {
+  router.push('/games')
+}
 
 async function createGame() {
   error.value = null
@@ -81,7 +89,7 @@ async function createGame() {
   }
   try {
     const token = localStorage.getItem('token')
-    const res = await fetch(`${API}/tictactoe/`, {
+    const res = await fetch(`${API_BASE}/tictactoe/`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -107,7 +115,10 @@ async function createGame() {
 .field { margin-bottom: 1rem; }
 label { display: block; font-weight: bold; margin-bottom: 0.5rem; }
 select { width: 100%; padding: 0.5rem; }
+.actions { display: flex; gap: 1rem; justify-content: flex-end; }
 button { padding: 0.5rem 1rem; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+button.secondary { background: #6c757d; }
+button.secondary:hover { background: #5a6268; }
 button:hover { background: #0056b3; }
 .error { color: red; margin-top: 1rem; }
 </style>

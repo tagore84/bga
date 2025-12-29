@@ -37,6 +37,7 @@
     </div>
 
     <div class="actions mt-3">
+        <button @click="goBack" class="btn-secondary">Volver</button>
         <button @click="createGame" :disabled="!isValid" class="btn-primary">
             Comenzar Partida
         </button>
@@ -46,6 +47,7 @@
 
 <script>
 import axios from 'axios'
+import { API_BASE } from '../../config'
 
 export default {
   name: 'ChessConfig',
@@ -65,18 +67,21 @@ export default {
   async created() {
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.get('http://localhost:8000/players/', {
+      const res = await axios.get(`${API_BASE}/players/`, {
          headers: { Authorization: `Bearer ${token}` }
       });
       // Filter players for Chess (game_id=3/11 typically) or Human (null) 
       // Assuming Chess game_id is 11 from previous file view context, or allow 3 if that was it.
       // Actually previous code said game_id === 11. I'll stick to that.
-      this.players = res.data.filter(p => p.game_id === 11 || p.game_id === null); 
+      this.players = res.data.filter(p => p.game_id === 3 || p.game_id === null); 
     } catch (e) {
       this.error = "Error cargando jugadores"
     }
   },
   methods: {
+    goBack() {
+      this.$router.push('/games')
+    },
     async createGame() {
       try {
         const token = localStorage.getItem('token');
@@ -87,7 +92,7 @@ export default {
           opponent_type: "human"
         };
 
-        const res = await axios.post('http://localhost:8000/chess/', payload, {
+        const res = await axios.post(`${API_BASE}/chess/`, payload, {
            headers: { Authorization: `Bearer ${token}` }
         });
         
@@ -192,6 +197,7 @@ export default {
 .vs-text {
     background: -webkit-linear-gradient(#eee, #333);
     -webkit-background-clip: text;
+    background-clip: text;
     -webkit-text-fill-color: transparent;
 }
 
@@ -223,6 +229,22 @@ export default {
     opacity: 0.5;
     cursor: not-allowed;
     filter: grayscale(1);
+}
+
+.btn-secondary {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: white;
+    padding: 1rem 3rem;
+    font-size: 1.1rem;
+    font-weight: bold;
+    border-radius: 30px;
+    cursor: pointer;
+    margin-right: 1rem;
+    transition: all 0.2s;
+}
+.btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.2);
 }
 
 .error { color: #ef4444; font-weight: bold;}

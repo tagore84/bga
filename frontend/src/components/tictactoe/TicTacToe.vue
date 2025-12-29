@@ -50,9 +50,8 @@ import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 
-const API_BASE = window.location.hostname === 'localhost'
-  ? 'http://localhost:8000'
-  : 'http://backend:8000'
+import { API_BASE, WS_BASE } from '../../config'
+
 
 const route = useRoute()
 const router = useRouter()
@@ -139,8 +138,9 @@ const meUsername = JSON.parse(atob(localStorage
 onMounted(async () => {
   // 1) Conecta WebSocket…
   socket = new WebSocket(
-    `ws://${window.location.hostname}:8000/ws/tictactoe/${gameId}`
+    `${WS_BASE}/ws/tictactoe/${gameId}`
   );
+
   socket.onmessage = ({ data }) => {
     try {
       const msg = JSON.parse(data)

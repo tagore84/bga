@@ -42,7 +42,7 @@ services:
   frontend:
     build: ./frontend
     ports:
-      - '3000:5173' # ✅ mapa el puerto real del contenedor al 3000 del host
+      - '3001:5173' # ✅ mapa el puerto real del contenedor al 3001 del host
     volumes:
       - ./frontend:/app
       - /app/node_modules
