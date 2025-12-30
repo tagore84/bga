@@ -92,10 +92,10 @@ onMounted(async () => {
     }
 
     const allowedAI = {
-      'Fácil': 'Fácil',
-      'Medio': 'Medio',
-      'Difícil': 'Difícil',
-      'Experimental': 'Experimental'
+      'Azul Fácil (IA)': 'Fácil',
+      'Azul Medio (IA)': 'Medio',
+      'Azul Difícil (IA)': 'Difícil',
+      'Experimental (IA)': 'Experimental'
     }
 
     players.value = rawPlayers
@@ -114,7 +114,7 @@ onMounted(async () => {
           displayName = `${newName} (tú)`
         }
 
-        return { ...p, name: newName, displayName }
+        return { ...p, name: newName, displayName, originalName: p.name }
       })
       .sort((a, b) => {
         const getPriority = (p) => {
@@ -160,7 +160,7 @@ async function createGame() {
     return {
       id,
       type: pType,
-      name: jugador?.name
+      name: jugador?.originalName || jugador?.name
     }
   })
 

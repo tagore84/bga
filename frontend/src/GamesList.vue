@@ -167,4 +167,14 @@ async function deleteGame(gameId) {
 .delete-btn:hover {
   opacity: 1;
 }
+
+@media (max-width: 768px) {
+  .games-container {
+    padding: 1rem;
+  }
+  
+  .games-grid {
+    grid-template-columns: 1fr;
+  }
+}
 </style>

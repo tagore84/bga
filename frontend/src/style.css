@@ -34,6 +34,16 @@
   --font-header: 'Outfit', sans-serif;
 }
 
+@media (max-width: 768px) {
+  :root {
+    --spacing-xs: 0.25rem;
+    --spacing-sm: 0.5rem;
+    --spacing-md: 1rem;
+    --spacing-lg: 1.5rem;
+  }
+}
+
+
 /* Reset & Base */
 * {
   box-sizing: border-box;

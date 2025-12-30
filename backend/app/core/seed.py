@@ -70,7 +70,6 @@ AI_PLAYER_CONFIG = {
         {"name": "Azul Difícil (IA)", "description": "Estrategia MinMax (Profundidad 4)", "strategy": HeuristicMinMaxMctsAdapter(strategy='minmax', depth=4)}
     ],
     "chess": [
-         {"name": "Muy Fácil (IA)", "description": "IA Aleatoria (Random)", "strategy": RandomChessAI()},
          {"name": "Chess Fácil (IA)", "description": "IA Minimax (Profundidad 2)", "strategy": MinimaxChessAI(depth=2)},
          {"name": "Chess Medio (IA)", "description": "IA Minimax (Profundidad 3)", "strategy": MinimaxChessAI(depth=3)},
          {"name": "Chess Difícil (IA)", "description": "IA Minimax (Profundidad 4)", "strategy": MinimaxChessAI(depth=4)},
@@ -167,40 +166,51 @@ async def sync_ai_players(db: AsyncSession):
     
     for game_name, ais in AI_PLAYER_CONFIG.items():
         # Get Game ID
+        # Try exact match first
         result = await db.execute(select(Game).where(Game.name == game_name))
         game = result.scalar_one_or_none()
         
+        # If not found, try case-insensitive
+        if not game:
+            result = await db.execute(select(Game).where(Game.name.ilike(game_name)))
+            game = result.scalar_one_or_none()
+
         if not game:
             print(f"Warning: Game '{game_name}' not found in DB. Skipping AI sync for it.")
             continue
             
         game_id_val = game.id
+        print(f"[{game_name}] Syncing AI players for Game ID: {game_id_val}")
             
         for ai_conf in ais:
-            # Check if this specific AI player already exists
-            stmt = select(Player).where(
-                Player.name == ai_conf["name"],
-                Player.game_id == game_id_val,
-                Player.type == PlayerType.ai
-            )
-            result = await db.execute(stmt)
-            existing_ai = result.scalar_one_or_none()
+            try:
+                # Check if this specific AI player already exists
+                stmt = select(Player).where(
+                    Player.name == ai_conf["name"],
+                    Player.game_id == game_id_val,
+                    Player.type == PlayerType.ai
+                )
+                result = await db.execute(stmt)
+                existing_ai = result.scalar_one_or_none()
 
-            if existing_ai:
-                # Update description if needed, or just skip
-                # print(f"[{game_name}] AI Player '{ai_conf['name']}' already exists. Skipping.")
-                continue
+                if existing_ai:
+                    # Update description if needed, or just skip
+                    # print(f"[{game_name}] AI Player '{ai_conf['name']}' already exists. Skipping.")
+                    continue
 
-            # Create if missing
-            new_ai = Player(
-                name=ai_conf["name"],
-                description=ai_conf["description"],
-                game_id=game_id_val,
-                hashed_password=None,
-                type=PlayerType.ai
-            )
-            db.add(new_ai)
-            await db.commit()
-            print(f"[{game_name}] Created NEW AI Player: {ai_conf['name']}")
+                # Create if missing
+                new_ai = Player(
+                    name=ai_conf["name"],
+                    description=ai_conf["description"],
+                    game_id=game_id_val,
+                    hashed_password=None,
+                    type=PlayerType.ai
+                )
+                db.add(new_ai)
+                await db.commit()
+                print(f"[{game_name}] Created NEW AI Player: {ai_conf['name']}")
+            except Exception as e:
+                print(f"[{game_name}] ERROR creating AI '{ai_conf['name']}': {e}")
+                await db.rollback()
     
     print("AI Player Sync Complete.")

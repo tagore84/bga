@@ -332,8 +332,9 @@ onBeforeUnmount(() => {
 }
 .board-wrapper {
     position: relative;
-    width: 780px;
-    height: 490px;
+    width: 100%;
+    max-width: 780px;
+    aspect-ratio: 780 / 490;
     margin-top: 20px;
     background-color: transparent; 
 }
@@ -348,10 +349,10 @@ onBeforeUnmount(() => {
 }
 .pieces-container {
     position: absolute;
-    top: 12px;
-    bottom: 15px; 
-    left: 19px;
-    right: 19px;
+    top: 2.45%;
+    bottom: 3.06%; 
+    left: 2.44%;
+    right: 2.44%;
     z-index: 5;
 }
 .piece {
@@ -469,10 +470,10 @@ onBeforeUnmount(() => {
 
 .winning-line-container {
     position: absolute;
-    top: 12px;
-    left: 19px;
-    width: calc(100% - 38px);
-    height: calc(100% - 27px);
+    top: 2.45%;
+    left: 2.44%;
+    width: 95.12%; /* 100% - 2.44% - 2.44% */
+    height: 94.49%; /* 100% - 2.45% - 3.06% */
     z-index: 30;
     pointer-events: none;
     display: block;

@@ -558,6 +558,12 @@ export default {
     min-height: 100vh;
 }
 
+@media (max-width: 600px) {
+    .chess-game-container {
+        padding: 0.5rem;
+    }
+}
+
 .game-layout {
     display: flex;
     align-items: flex-start;
@@ -567,6 +573,14 @@ export default {
     margin-top: 1rem;
 }
 
+@media (max-width: 900px) {
+    .game-layout {
+        flex-direction: column;
+        align-items: center;
+        gap: 1rem;
+    }
+}
+
 .captured-panel {
     width: 80px;
     min-height: 300px;
@@ -574,7 +588,25 @@ export default {
     flex-direction: column;
     padding: 1rem 0.5rem;
     align-items: center;
-    background: rgba(255, 255, 255, 0.15); /* Lightened background for better black piece visibility */
+    background: rgba(255, 255, 255, 0.15);
+}
+
+@media (max-width: 900px) {
+    .captured-panel {
+        width: 100%;
+        min-height: auto;
+        flex-direction: row;
+        padding: 0.5rem 1rem;
+        justify-content: flex-start;
+        overflow-x: auto;
+    }
+    
+    .captured-panel h4 {
+        margin-right: 1rem;
+        margin-bottom: 0;
+        font-size: 0.9rem;
+        white-space: nowrap;
+    }
 }
 
 .captured-list {
@@ -583,6 +615,14 @@ export default {
     gap: 5px;
     margin-top: 10px;
     align-items: center;
+}
+
+@media (max-width: 900px) {
+    .captured-list {
+        flex-direction: row;
+        margin-top: 0;
+        flex-wrap: wrap;
+    }
 }
 
 .captured-piece {
@@ -609,13 +649,14 @@ export default {
     background: linear-gradient(135deg, #4b3621 0%, #2c1e12 100%);
     border-radius: 6px;
     box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+    max-width: 100%;
 }
 
 .board {
     display: flex;
     flex-direction: column;
-    width: min(80vh, 600px);
-    height: min(80vh, 600px);
+    width: min(90vw, 80vh, 600px);
+    height: min(90vw, 80vh, 600px);
     user-select: none;
 }
 

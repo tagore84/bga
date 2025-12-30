@@ -60,179 +60,187 @@
             </div>
           </div>
         </div>
-        <v-stage
-          ref="stageRef"
-          :width="Math.max(
-            1000,
-            Math.max(
-              gameState?.expositores?.length * 160 + 100,
-              610 + ((gameState?.jugadores && Object.keys(gameState.jugadores).length > 1 ? 2 : 1) * 360)
-            )
-          )"
-          :height="250 + Math.ceil(Object.keys(gameState.jugadores).length / 2) * 240">
-          <v-layer>
-            <template v-for="(jugador, jIndex) in Object.values(gameState.jugadores)" :key="'jugador-' + jIndex">
-              <v-image
-                :image="boardImage"
-                :x="610 + (jIndex % 2) * 360"
-                :y="250 + Math.floor(jIndex / 2) * 240"
-                :width="330"
-                :height="220"
-                :stroke="gameState?.turno_actual === jugador.name ? 'red' : 'black'"
-                :strokeWidth="gameState?.turno_actual === jugador.name ? 5 : 1"
-              />
-              <template v-if="jugador.name === me">
-                <template v-for="row in 5" :key="'fila-' + row">
+        <div class="canvas-scroll-container">
+          <v-stage
+            ref="stageRef"
+            :width="Math.max(
+              1000,
+              Math.max(
+                gameState?.expositores?.length * 160 + 100,
+                610 + ((gameState?.jugadores && Object.keys(gameState.jugadores).length > 1 ? 2 : 1) * 360)
+              )
+            )"
+            :height="250 + Math.ceil(Object.keys(gameState.jugadores).length / 2) * 240">
+            <v-layer>
+              <template v-for="(jugador, jIndex) in Object.values(gameState.jugadores)" :key="'jugador-' + jIndex">
+                <v-image
+                  :image="boardImage"
+                  :x="610 + (jIndex % 2) * 360"
+                  :y="250 + Math.floor(jIndex / 2) * 240"
+                  :width="330"
+                  :height="220"
+                  :stroke="gameState?.turno_actual === jugador.name ? 'red' : 'black'"
+                  :strokeWidth="gameState?.turno_actual === jugador.name ? 5 : 1"
+                />
+                <template v-if="jugador.name === me">
+                  <template v-for="row in 5" :key="'fila-' + row">
+                    <v-rect
+                      :x="(610 + (jIndex % 2) * 360) + 13 - 29*row + 29*5"
+                      :y="(250 + Math.floor(jIndex / 2) * 240) + 14 + (row-1) * 29"
+                      :width="29*row - 2"
+                      :height="27"
+                      :fill="getRowFillState(row)"
+                      :opacity="getRowOpacity(row)"
+                      :stroke="selectedRow === row ? 'red' : isSelectableRow(row) ? 'gray' : 'black'"
+                      :strokeWidth="selectedRow === row ? 3 : isSelectableRow(row) ? 2 : 1"
+                      :onclick="() => handleRowClick(row)"
+                      :ontap="() => handleRowClick(row)"
+                    />
+                  </template>
+                  <!-- Floor option (row 0) -->
                   <v-rect
-                    :x="(610 + (jIndex % 2) * 360) + 13 - 29*row + 29*5"
-                    :y="(250 + Math.floor(jIndex / 2) * 240) + 14 + (row-1) * 29"
-                    :width="29*row - 2"
-                    :height="27"
-                    :fill="getRowFillState(row)"
-                    :opacity="getRowOpacity(row)"
-                    :stroke="selectedRow === row ? 'red' : isSelectableRow(row) ? 'gray' : 'black'"
-                    :strokeWidth="selectedRow === row ? 3 : isSelectableRow(row) ? 2 : 1"
-                    :onclick="() => handleRowClick(row)"
+                    :x="(610 + (jIndex % 2) * 360) + 13"
+                    :y="(250 + Math.floor(jIndex / 2) * 240) + 175"
+                    :width="210"
+                    :height="28"
+                    :fill="getRowFillState(0)"
+                    :opacity="getRowOpacity(0)"
+                    :stroke="selectedRow === 0 ? 'red' : isSelectableRow(0) ? 'gray' : 'black'"
+                    :strokeWidth="selectedRow === 0 ? 3 : isSelectableRow(0) ? 2 : 1"
+                    :onclick="() => handleRowClick(0)"
+                    :ontap="() => handleRowClick(0)"
                   />
                 </template>
-                <!-- Floor option (row 0) -->
-                <v-rect
-                  :x="(610 + (jIndex % 2) * 360) + 13"
-                  :y="(250 + Math.floor(jIndex / 2) * 240) + 175"
-                  :width="210"
-                  :height="28"
-                  :fill="getRowFillState(0)"
-                  :opacity="getRowOpacity(0)"
-                  :stroke="selectedRow === 0 ? 'red' : isSelectableRow(0) ? 'gray' : 'black'"
-                  :strokeWidth="selectedRow === 0 ? 3 : isSelectableRow(0) ? 2 : 1"
-                  :onclick="() => handleRowClick(0)"
-                />
-              </template>
-              <template v-for="(fila, y) in jugador.patrones" :key="'patron-fila-' + y + '-j' + jIndex">
-                <template v-for="(casilla, i) in fila" :key="'patron-casilla-' + y + '-' + i + '-j' + jIndex">
-                  <template v-if="casilla !== null && casilla !== ''">
-                    <v-image
-                      :x="(610 + (jIndex % 2) * 360) + 129 - 29 * i"
-                      :y="(250 + Math.floor(jIndex / 2) * 240) + 14 + y * 29"
-                      :width="28"
-                      :height="28"
-                      :image="getColorImg(casilla)"
-                      :onclick="() => handleRowClick(y + 1)"
-                      :stroke="isLastMoveTile(jugador, y, i, false) ? 'yellow' : null"
-                      :strokeWidth="isLastMoveTile(jugador, y, i, false) ? 4 : 0"
-                      :shadowColor="isLastMoveTile(jugador, y, i, false) ? 'orange' : null"
-                      :shadowBlur="isLastMoveTile(jugador, y, i, false) ? 20 : 0"
-                    />
-                  </template>
-                  <template v-else>
-                    <v-rect
-                      :x="(610 + (jIndex % 2) * 360) + 13 - 29 * (y + 1) + 29 * (i + 1) + 116"
-                      :y="(250 + Math.floor(jIndex / 2) * 240) + 14 + y * 29"
-                      :width="28"
-                      :height="28"
-                      :fill="'white'"
-                      stroke="black"
-                      :onclick="() => handleRowClick(y + 1)"
-                    />
+                <template v-for="(fila, y) in jugador.patrones" :key="'patron-fila-' + y + '-j' + jIndex">
+                  <template v-for="(casilla, i) in fila" :key="'patron-casilla-' + y + '-' + i + '-j' + jIndex">
+                    <template v-if="casilla !== null && casilla !== ''">
+                      <v-image
+                        :x="(610 + (jIndex % 2) * 360) + 129 - 29 * i"
+                        :y="(250 + Math.floor(jIndex / 2) * 240) + 14 + y * 29"
+                        :width="28"
+                        :height="28"
+                        :image="getColorImg(casilla)"
+                        :onclick="() => handleRowClick(y + 1)"
+                        :ontap="() => handleRowClick(y + 1)"
+                        :stroke="isLastMoveTile(jugador, y, i, false) ? 'yellow' : null"
+                        :strokeWidth="isLastMoveTile(jugador, y, i, false) ? 4 : 0"
+                        :shadowColor="isLastMoveTile(jugador, y, i, false) ? 'orange' : null"
+                        :shadowBlur="isLastMoveTile(jugador, y, i, false) ? 20 : 0"
+                      />
+                    </template>
+                    <template v-else>
+                      <v-rect
+                        :x="(610 + (jIndex % 2) * 360) + 13 - 29 * (y + 1) + 29 * (i + 1) + 116"
+                        :y="(250 + Math.floor(jIndex / 2) * 240) + 14 + y * 29"
+                        :width="28"
+                        :height="28"
+                        :fill="'white'"
+                        stroke="black"
+                        :onclick="() => handleRowClick(y + 1)"
+                        :ontap="() => handleRowClick(y + 1)"
+                      />
+                    </template>
                   </template>
                 </template>
-              </template>
-              <!-- Renderizar muro (pared) -->
-              <template v-for="(fila, r) in jugador.pared" :key="'pared-fila-' + r + '-j' + jIndex">
-                 <template v-for="(casilla, c) in fila" :key="'pared-casilla-' + r + '-' + c + '-j' + jIndex">
-                    <v-image v-if="casilla !== null"
-                      :x="(610 + (jIndex % 2) * 360) + 175 + c * 29"
-                      :y="(250 + Math.floor(jIndex / 2) * 240) + 14 + r * 29"
-                      :width="28"
-                      :height="28"
-                      :image="getColorImg(casilla)"
-                    />
-                 </template>
-              </template>
-              <!-- Renderizar fichas del suelo -->
-              <template v-if="jugador.suelo">
+                <!-- Renderizar muro (pared) -->
+                <template v-for="(fila, r) in jugador.pared" :key="'pared-fila-' + r + '-j' + jIndex">
+                   <template v-for="(casilla, c) in fila" :key="'pared-casilla-' + r + '-' + c + '-j' + jIndex">
+                      <v-image v-if="casilla !== null"
+                        :x="(610 + (jIndex % 2) * 360) + 175 + c * 29"
+                        :y="(250 + Math.floor(jIndex / 2) * 240) + 14 + r * 29"
+                        :width="28"
+                        :height="28"
+                        :image="getColorImg(casilla)"
+                      />
+                   </template>
+                </template>
+                <!-- Renderizar fichas del suelo -->
+                <template v-if="jugador.suelo">
+                  <v-image
+                    v-for="(casilla, i) in jugador.suelo"
+                    :key="'suelo-' + i + '-j' + jIndex"
+                    :x="(610 + (jIndex % 2) * 360) + 13 + i * 30"
+                    :y="(250 + Math.floor(jIndex / 2) * 240) + 175"
+                    :width="28"
+                    :height="28"
+                    :image="getColorImg(casilla)"
+                    :stroke="isLastMoveTile(jugador, -1, i, true) ? 'yellow' : null"
+                    :strokeWidth="isLastMoveTile(jugador, -1, i, true) ? 4 : 0"
+                    :shadowColor="isLastMoveTile(jugador, -1, i, true) ? 'orange' : null"
+                    :shadowBlur="isLastMoveTile(jugador, -1, i, true) ? 20 : 0"
+                  />
+                </template>
+                <!-- First player tile on floor -->
                 <v-image
-                  v-for="(casilla, i) in jugador.suelo"
-                  :key="'suelo-' + i + '-j' + jIndex"
-                  :x="(610 + (jIndex % 2) * 360) + 13 + i * 30"
+                  v-if="jugador.tiene_ficha_inicial && !gameState?.first_player_marker_in_center"
+                  :x="(610 + (jIndex % 2) * 360) + 13 + (jugador.suelo?.length || 0) * 30"
                   :y="(250 + Math.floor(jIndex / 2) * 240) + 175"
-                  :width="28"
-                  :height="28"
-                  :image="getColorImg(casilla)"
-                  :stroke="isLastMoveTile(jugador, -1, i, true) ? 'yellow' : null"
-                  :strokeWidth="isLastMoveTile(jugador, -1, i, true) ? 4 : 0"
-                  :shadowColor="isLastMoveTile(jugador, -1, i, true) ? 'orange' : null"
-                  :shadowBlur="isLastMoveTile(jugador, -1, i, true) ? 20 : 0"
+                  :width="30"
+                  :height="30"
+                  :image="firstPlayerTileImage"
                 />
               </template>
-              <!-- First player tile on floor -->
+              <template v-for="(expositor, index) in gameState?.expositores || []" :key="index">
+                <v-image
+                  :image="factoryImage"
+                  :x="index * 160"
+                  :y="50"
+                  :width="140"
+                  :height="140"
+                />
+                <v-image
+                  v-for="(color, i) in expositor"
+                  :key="i"
+                  :x="index * 160 + 32 + (i % 2) * 50"
+                  :y="80 + Math.floor(i / 2) * 50"
+                  :width="30"
+                  :height="30"
+                  :image="getColorImg(color)"
+                  :onclick="() => handleFactoryClick(index, color)"
+                  :ontap="() => handleFactoryClick(index, color)"
+                  :opacity="isSelectable(index, color) ? 1 : 0.4"
+                  :stroke="isSelected(index, color) ? 'red' : null"
+                  :strokeWidth="isSelected(index, color) ? 3 : 0"
+                />
+              </template>
+              <template v-for="(color, i) in gameState?.centro" :key="'centro-' + i">
+                <v-image
+                  :x="100 + (i % 5) * 40"
+                  :y="230 + Math.floor(i / 5) * 40"
+                  :width="30"
+                  :height="30"
+                  :image="getColorImg(color)"
+                  :onclick="() => handleCenterClick(color)"
+                  :ontap="() => handleCenterClick(color)"
+                  :opacity="isSelectable('centro', color) ? 1 : 0.4"
+                  :stroke="isSelected('centro', color) ? 'red' : null"
+                  :strokeWidth="isSelected('centro', color) ? 3 : 0"
+                />
+              </template>
+              <!-- First player tile in center -->
               <v-image
-                v-if="jugador.tiene_ficha_inicial && !gameState?.first_player_marker_in_center"
-                :x="(610 + (jIndex % 2) * 360) + 13 + (jugador.suelo?.length || 0) * 30"
-                :y="(250 + Math.floor(jIndex / 2) * 240) + 175"
-                :width="30"
-                :height="30"
+                v-if="gameState?.first_player_marker_in_center"
+                :x="60"
+                :y="230"
+                :width="35"
+                :height="35"
                 :image="firstPlayerTileImage"
               />
-            </template>
-            <template v-for="(expositor, index) in gameState?.expositores || []" :key="index">
+            </v-layer>
+            <v-layer>
               <v-image
-                :image="factoryImage"
-                :x="index * 160"
-                :y="50"
-                :width="140"
-                :height="140"
-              />
-              <v-image
-                v-for="(color, i) in expositor"
-                :key="i"
-                :x="index * 160 + 32 + (i % 2) * 50"
-                :y="80 + Math.floor(i / 2) * 50"
+                v-for="(pieza, i) in animatedPieces"
+                :key="'anim-' + i"
+                :x="pieza.x"
+                :y="pieza.y"
                 :width="30"
                 :height="30"
-                :image="getColorImg(color)"
-                :onclick="() => handleFactoryClick(index, color)"
-                :opacity="isSelectable(index, color) ? 1 : 0.4"
-                :stroke="isSelected(index, color) ? 'red' : null"
-                :strokeWidth="isSelected(index, color) ? 3 : 0"
+                :image="getColorImg(pieza.color)"
+                :config="{ id: 'anim-' + i }"
               />
-            </template>
-            <template v-for="(color, i) in gameState?.centro" :key="'centro-' + i">
-              <v-image
-                :x="100 + (i % 5) * 40"
-                :y="230 + Math.floor(i / 5) * 40"
-                :width="30"
-                :height="30"
-                :image="getColorImg(color)"
-                :onclick="() => handleCenterClick(color)"
-                :opacity="isSelectable('centro', color) ? 1 : 0.4"
-                :stroke="isSelected('centro', color) ? 'red' : null"
-                :strokeWidth="isSelected('centro', color) ? 3 : 0"
-              />
-            </template>
-            <!-- First player tile in center -->
-            <v-image
-              v-if="gameState?.first_player_marker_in_center"
-              :x="60"
-              :y="230"
-              :width="35"
-              :height="35"
-              :image="firstPlayerTileImage"
-            />
-          </v-layer>
-          <v-layer>
-            <v-image
-              v-for="(pieza, i) in animatedPieces"
-              :key="'anim-' + i"
-              :x="pieza.x"
-              :y="pieza.y"
-              :width="30"
-              :height="30"
-              :image="getColorImg(pieza.color)"
-              :config="{ id: 'anim-' + i }"
-            />
-          </v-layer>
-        </v-stage>
+            </v-layer>
+          </v-stage>
+        </div>
       </div>
       
       <div v-if="gameState?.log && gameState.log.length > 0" class="game-log" ref="logContainer">
@@ -1044,5 +1052,63 @@ if (socket) socket.close()
   border-radius: var(--radius-sm);
   text-align: center;
   margin: 1rem 0;
+}
+
+.azul-game-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  padding: 1rem;
+}
+
+@media (max-width: 768px) {
+  .azul-game-container {
+    padding: 0.5rem;
+  }
+}
+
+.canvas-scroll-container {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-md);
+  margin-top: 1rem;
+}
+
+/* Header Responsiveness */
+.header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+@media (max-width: 600px) {
+  .header-row {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .players-grid {
+    grid-template-columns: 1fr; /* Stack players on mobile */
+  }
+}
+
+.players-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.player-card {
+  background: rgba(255,255,255,0.05);
+  padding: 0.75rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+}
+
+.player-card.active {
+  border-color: var(--primary);
+  background: rgba(59, 130, 246, 0.1);
 }
 </style>

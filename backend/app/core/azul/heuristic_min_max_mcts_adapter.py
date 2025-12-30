@@ -1,4 +1,12 @@
 from app.core.ai_base import AIBase, register_ai
+import sys
+import os
+
+# Add the 'zero' directory to sys.path so that internal imports work
+zero_dir = os.path.join(os.path.dirname(__file__), 'zero')
+if zero_dir not in sys.path:
+    sys.path.append(zero_dir)
+
 from app.core.azul.zero.heuristic_min_max_mcts_player import HeuristicMinMaxMCTSPlayer, decode_action
 from app.core.azul.adapter import bga_state_to_azul_zero_obs
 from app.models.azul.azul import AzulMove, Color
