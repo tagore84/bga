@@ -374,8 +374,8 @@ onBeforeUnmount(() => {
 .click-layer {
     position: absolute;
     top: 0;
-    left: 0;
-    width: 100%;
+    left: 10.5%;
+    width: 80%;
     height: 100%;
     z-index: 20;
     display: flex;

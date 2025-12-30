@@ -32,7 +32,7 @@ class MCTS:
             exploration = cpuct * self.prior * math.sqrt(self.parent.visits) / (1 + self.visits)
             return self.value + exploration
 
-    def __init__(self, env: AzulEnv, model: Any, simulations: int = 100, cpuct: float = 1.0, single_player_mode: bool = False):
+    def __init__(self, env: AzulEnv, model: Any, simulations: int = 100, cpuct: float = 1.0, single_player_mode: bool = True):
         """
         env: an AzulEnv instance to clone for rollouts.
         simulations: number of MCTS simulations per move.
