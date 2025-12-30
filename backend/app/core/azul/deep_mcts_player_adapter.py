@@ -10,14 +10,14 @@ from app.core.azul.adapter import bga_state_to_azul_zero_obs
 from app.models.azul.azul import AzulMove, Color
 
 class AIAzulDeepMCTS(AIBase):
-    def __init__(self, model_path: str, device: str = None, mcts_iters: int = 1, cpuct: float = 0):
+    def __init__(self, model_path: str, device: str = None, mcts_iters: int = 1, cpuct: float = 0, single_player_mode=True):
         if device is None:
             import torch
             device = 'cuda' if torch.cuda.is_available() else 'cpu'
             # MPS is not supported in Docker usually, but if running locally on Mac without docker it might be.
             # However, for safety in this environment (Docker), let's prefer CPU if not CUDA.
         
-        self.player = DeepMCTSPlayer(model_path, device=device, mcts_iters=mcts_iters, cpuct=cpuct)
+        self.player = DeepMCTSPlayer(model_path, device=device, mcts_iters=mcts_iters, cpuct=cpuct, single_player_mode=single_player_mode)
         print(f"AIAzulDeepMCTS loaded model from {model_path} on {device}")
 
     def select_move(self, state: Any) -> AzulMove:

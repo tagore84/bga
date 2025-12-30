@@ -56,7 +56,7 @@ class DeepMCTSPlayer(BasePlayer):
                          self.net,
                          simulations=mcts_iters,
                          cpuct=cpuct,
-                         single_player_mode=True)
+                         single_player_mode=single_player_mode)
 
     def _obs_to_env(self, obs: dict):
         """

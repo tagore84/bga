@@ -64,19 +64,19 @@
           <v-stage
             ref="stageRef"
             :width="Math.max(
-              1000,
+              850,
               Math.max(
-                gameState?.expositores?.length * 160 + 100,
-                610 + ((gameState?.jugadores && Object.keys(gameState.jugadores).length > 1 ? 2 : 1) * 360)
+                 gameState?.expositores?.length * 160 + 100,
+                20 + ((gameState?.jugadores && Object.keys(gameState.jugadores).length > 1 ? 2 : 1) * 360)
               )
             )"
-            :height="250 + Math.ceil(Object.keys(gameState.jugadores).length / 2) * 240">
+            :height="450 + Math.ceil(Object.keys(gameState.jugadores).length / 2) * 240">
             <v-layer>
               <template v-for="(jugador, jIndex) in Object.values(gameState.jugadores)" :key="'jugador-' + jIndex">
                 <v-image
                   :image="boardImage"
-                  :x="610 + (jIndex % 2) * 360"
-                  :y="250 + Math.floor(jIndex / 2) * 240"
+                  :x="20 + (jIndex % 2) * 360"
+                  :y="450 + Math.floor(jIndex / 2) * 240"
                   :width="330"
                   :height="220"
                   :stroke="gameState?.turno_actual === jugador.name ? 'red' : 'black'"
@@ -85,8 +85,8 @@
                 <template v-if="jugador.name === me">
                   <template v-for="row in 5" :key="'fila-' + row">
                     <v-rect
-                      :x="(610 + (jIndex % 2) * 360) + 13 - 29*row + 29*5"
-                      :y="(250 + Math.floor(jIndex / 2) * 240) + 14 + (row-1) * 29"
+                      :x="(20 + (jIndex % 2) * 360) + 13 - 29*row + 29*5"
+                      :y="(450 + Math.floor(jIndex / 2) * 240) + 14 + (row-1) * 29"
                       :width="29*row - 2"
                       :height="27"
                       :fill="getRowFillState(row)"
@@ -99,8 +99,8 @@
                   </template>
                   <!-- Floor option (row 0) -->
                   <v-rect
-                    :x="(610 + (jIndex % 2) * 360) + 13"
-                    :y="(250 + Math.floor(jIndex / 2) * 240) + 175"
+                    :x="(20 + (jIndex % 2) * 360) + 13"
+                    :y="(450 + Math.floor(jIndex / 2) * 240) + 175"
                     :width="210"
                     :height="28"
                     :fill="getRowFillState(0)"
@@ -115,8 +115,8 @@
                   <template v-for="(casilla, i) in fila" :key="'patron-casilla-' + y + '-' + i + '-j' + jIndex">
                     <template v-if="casilla !== null && casilla !== ''">
                       <v-image
-                        :x="(610 + (jIndex % 2) * 360) + 129 - 29 * i"
-                        :y="(250 + Math.floor(jIndex / 2) * 240) + 14 + y * 29"
+                        :x="(20 + (jIndex % 2) * 360) + 129 - 29 * i"
+                        :y="(450 + Math.floor(jIndex / 2) * 240) + 14 + y * 29"
                         :width="28"
                         :height="28"
                         :image="getColorImg(casilla)"
@@ -130,8 +130,8 @@
                     </template>
                     <template v-else>
                       <v-rect
-                        :x="(610 + (jIndex % 2) * 360) + 13 - 29 * (y + 1) + 29 * (i + 1) + 116"
-                        :y="(250 + Math.floor(jIndex / 2) * 240) + 14 + y * 29"
+                        :x="(20 + (jIndex % 2) * 360) + 13 - 29 * (y + 1) + 29 * (i + 1) + 116"
+                        :y="(450 + Math.floor(jIndex / 2) * 240) + 14 + y * 29"
                         :width="28"
                         :height="28"
                         :fill="'white'"
@@ -146,8 +146,8 @@
                 <template v-for="(fila, r) in jugador.pared" :key="'pared-fila-' + r + '-j' + jIndex">
                    <template v-for="(casilla, c) in fila" :key="'pared-casilla-' + r + '-' + c + '-j' + jIndex">
                       <v-image v-if="casilla !== null"
-                        :x="(610 + (jIndex % 2) * 360) + 175 + c * 29"
-                        :y="(250 + Math.floor(jIndex / 2) * 240) + 14 + r * 29"
+                        :x="(20 + (jIndex % 2) * 360) + 175 + c * 29"
+                        :y="(450 + Math.floor(jIndex / 2) * 240) + 14 + r * 29"
                         :width="28"
                         :height="28"
                         :image="getColorImg(casilla)"
@@ -159,8 +159,8 @@
                   <v-image
                     v-for="(casilla, i) in jugador.suelo"
                     :key="'suelo-' + i + '-j' + jIndex"
-                    :x="(610 + (jIndex % 2) * 360) + 13 + i * 30"
-                    :y="(250 + Math.floor(jIndex / 2) * 240) + 175"
+                    :x="(20 + (jIndex % 2) * 360) + 13 + i * 30"
+                    :y="(450 + Math.floor(jIndex / 2) * 240) + 175"
                     :width="28"
                     :height="28"
                     :image="getColorImg(casilla)"
@@ -173,8 +173,8 @@
                 <!-- First player tile on floor -->
                 <v-image
                   v-if="jugador.tiene_ficha_inicial && !gameState?.first_player_marker_in_center"
-                  :x="(610 + (jIndex % 2) * 360) + 13 + (jugador.suelo?.length || 0) * 30"
-                  :y="(250 + Math.floor(jIndex / 2) * 240) + 175"
+                  :x="(20 + (jIndex % 2) * 360) + 13 + (jugador.suelo?.length || 0) * 30"
+                  :y="(450 + Math.floor(jIndex / 2) * 240) + 175"
                   :width="30"
                   :height="30"
                   :image="firstPlayerTileImage"
@@ -637,12 +637,12 @@ async function confirmMove() {
     let targetX, targetY
     if (selectedRow.value === 0) {
       // Floor position
-      targetX = 610 + offsetX + 13 + 15
-      targetY = 250 + offsetY + 175 + 15
+      targetX = 20 + offsetX + 13 + 15
+      targetY = 450 + offsetY + 175 + 15
     } else {
       // Pattern row position
-      targetX = 623 + offsetX - 29 * selectedRow.value + 29 * 5 + 15
-      targetY = 264 + offsetY + (selectedRow.value - 1) * 29 + 15
+      targetX = 33 + offsetX - 29 * selectedRow.value + 29 * 5 + 15
+      targetY = 464 + offsetY + (selectedRow.value - 1) * 29 + 15
     }
 
     animatedPieces.value = coords.map((c) => ({ x: c.x, y: c.y, color }))
@@ -866,8 +866,11 @@ if (socket) socket.close()
 <style scoped>
 /* Main Container */
 .azul-game-container {
+  display: flex;
+  flex-direction: column;
   padding: 1rem;
-  max-width: 1400px;
+  width: fit-content;
+  max-width: 100%;
   margin: 0 auto;
 }
 
@@ -1054,12 +1057,7 @@ if (socket) socket.close()
   margin: 1rem 0;
 }
 
-.azul-game-container {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  padding: 1rem;
-}
+
 
 @media (max-width: 768px) {
   .azul-game-container {
@@ -1068,7 +1066,8 @@ if (socket) socket.close()
 }
 
 .canvas-scroll-container {
-  width: 100%;
+  width: fit-content;
+  max-width: 100%;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   background: rgba(255, 255, 255, 0.05);

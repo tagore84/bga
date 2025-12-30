@@ -39,7 +39,7 @@ AZUL_MODEL_PATH = os.path.join(os.path.dirname(__file__), "azul", "zero", "model
 AZUL_MODEL_DEVICE = 'cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'
 
 # --- CONFIGURATION CONSTANTS ---
-RESET_DB_ON_STARTUP = True#os.getenv("RESET_DB_ON_STARTUP", "False").lower() == "true"
+RESET_DB_ON_STARTUP = os.getenv("RESET_DB_ON_STARTUP", "False").lower() == "true"
 
 # --- GLOBAL AI CONFIGURATION ---
 # Centralized source of truth for all AI players in the platform.
