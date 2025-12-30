@@ -329,11 +329,12 @@ onBeforeUnmount(() => {
     margin-top: 2rem;
     font-family: 'Arial', sans-serif;
     padding-bottom: 2rem;
+    width: 100%;
 }
 .board-wrapper {
     position: relative;
-    width: 100%;
-    max-width: 780px;
+    width: 780px;
+    max-width: 100%;
     aspect-ratio: 780 / 490;
     margin-top: 20px;
     background-color: transparent; 
