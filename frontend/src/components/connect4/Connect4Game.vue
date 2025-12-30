@@ -333,9 +333,9 @@ onBeforeUnmount(() => {
 }
 .board-wrapper {
     position: relative;
-    width: 780px;
+    width: 443px;
     max-width: 100%;
-    aspect-ratio: 780 / 490;
+    aspect-ratio: 443 / 335;
     margin-top: 20px;
     background-color: transparent; 
 }
@@ -350,10 +350,10 @@ onBeforeUnmount(() => {
 }
 .pieces-container {
     position: absolute;
-    top: 2.45%;
-    bottom: 3.06%; 
-    left: 2.44%;
-    right: 2.44%;
+    top: 2%;
+    bottom: 16%; 
+    left: 10.5%;
+    right: 9.5%;
     z-index: 5;
 }
 .piece {
@@ -471,10 +471,10 @@ onBeforeUnmount(() => {
 
 .winning-line-container {
     position: absolute;
-    top: 2.45%;
-    left: 2.44%;
-    width: 95.12%; /* 100% - 2.44% - 2.44% */
-    height: 94.49%; /* 100% - 2.45% - 3.06% */
+    top: 2%;
+    left: 10.5%;
+    width: 80%; /* 100% - 10.5% - 9.5% */
+    height: 82%; /* 100% - 2% - 16% */
     z-index: 30;
     pointer-events: none;
     display: block;
