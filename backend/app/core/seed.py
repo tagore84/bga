@@ -24,7 +24,9 @@ from app.core.chess.ai_chess_random import RandomChessAI
 from app.core.tictactoe.ai_tictactoe_random import RandomTicTacToeAI
 
 # Connect4 Strategies
+# Connect4 Strategies
 from app.core.connect4.ai_connect4_random import RandomConnect4AI
+from app.core.connect4.ai_connect4_negamax import NegamaxConnect4AI
 
 # Azul Strategies
 from app.core.azul.ai_azul_random import RandomAzulAI
@@ -37,7 +39,7 @@ AZUL_MODEL_PATH = os.path.join(os.path.dirname(__file__), "azul", "zero", "model
 AZUL_MODEL_DEVICE = 'cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'
 
 # --- CONFIGURATION CONSTANTS ---
-RESET_DB_ON_STARTUP = os.getenv("RESET_DB_ON_STARTUP", "False").lower() == "true"
+RESET_DB_ON_STARTUP = True#os.getenv("RESET_DB_ON_STARTUP", "False").lower() == "true"
 
 # --- GLOBAL AI CONFIGURATION ---
 # Centralized source of truth for all AI players in the platform.
@@ -58,36 +60,31 @@ AI_PLAYER_CONFIG = {
         {"name": "RandomTicTacToe", "description": "Elige movimientos válidos al azar", "strategy": RandomTicTacToeAI()}
     ],
     "connect4": [
-        {"name": "RandomConnect4", "description": "Elige movimientos válidos al azar", "strategy": RandomConnect4AI()}
+        {"name": "Connect4 Fácil (IA)", "description": "IA Negamax (Profundidad 1)", "strategy": NegamaxConnect4AI(depth=1)},
+        {"name": "Connect4 Medio (IA)", "description": "IA Negamax (Profundidad 4)", "strategy": NegamaxConnect4AI(depth=4)},
+        {"name": "Connect4 Difícil (IA)", "description": "IA Negamax (Profundidad 8)", "strategy": NegamaxConnect4AI(depth=8)},
     ],
     "azul": [
-        {"name": "RandomAzul", "description": "Elige movimientos válidos al azar", "strategy": RandomAzulAI()},
-        {"name": "Fácil", "description": "IA aleatoria mejorada (evita penalizaciones obvias)", "strategy": RandomPlusAdapter()},
+        {"name": "Azul Fácil (IA)", "description": "Estrategia MinMax (Profundidad 1)", "strategy": HeuristicMinMaxMctsAdapter(strategy='minmax', depth=1)},
+        {"name": "Azul Medio (IA)", "description": "Estrategia MinMax (Profundidad 2)", "strategy": HeuristicMinMaxMctsAdapter(strategy='minmax', depth=2)},
+        {"name": "Azul Difícil (IA)", "description": "Estrategia MinMax (Profundidad 4)", "strategy": HeuristicMinMaxMctsAdapter(strategy='minmax', depth=4)}
     ],
     "chess": [
          {"name": "Muy Fácil (IA)", "description": "IA Aleatoria (Random)", "strategy": RandomChessAI()},
-         {"name": "Fácil (IA)", "description": "IA Minimax (Profundidad 2)", "strategy": MinimaxChessAI(depth=2)},
-         {"name": "Medio (IA)", "description": "IA Minimax (Profundidad 3)", "strategy": MinimaxChessAI(depth=3)},
-         {"name": "Difícil (IA)", "description": "IA Minimax (Profundidad 4)", "strategy": MinimaxChessAI(depth=4)},
-         {"name": "Extremo (IA)", "description": "IA Minimax (Profundidad 5)", "strategy": MinimaxChessAI(depth=5)}
+         {"name": "Chess Fácil (IA)", "description": "IA Minimax (Profundidad 2)", "strategy": MinimaxChessAI(depth=2)},
+         {"name": "Chess Medio (IA)", "description": "IA Minimax (Profundidad 3)", "strategy": MinimaxChessAI(depth=3)},
+         {"name": "Chess Difícil (IA)", "description": "IA Minimax (Profundidad 4)", "strategy": MinimaxChessAI(depth=4)},
+         {"name": "Chess Extremo (IA)", "description": "IA Minimax (Profundidad 5)", "strategy": MinimaxChessAI(depth=5)}
     ]
 }
-
 # Append experimental safely
 try:
-    exp_strategy = AIAzulDeepMCTS(model_path=AZUL_MODEL_PATH, device=AZUL_MODEL_DEVICE, mcts_iters=300, cpuct=1.0)
+    exp_strategy = AIAzulDeepMCTS(model_path=AZUL_MODEL_PATH, device=AZUL_MODEL_DEVICE, mcts_iters=350, cpuct=1.0)
     AI_PLAYER_CONFIG["azul"].append(
-        {"name": "Experimental", "description": "IA basada en AlphaZero (MCTS + Red Neuronal)", "strategy": exp_strategy}
+        {"name": "Experimental (IA)", "description": "IA basada en AlphaZero (MCTS + Red Neuronal)", "strategy": exp_strategy}
     )
 except Exception as e:
     print(f"⚠️  Skipping Experimental AI (DeepMCTS): {e}")
-
-# Append Heuristics safely
-try:
-    AI_PLAYER_CONFIG["azul"].append({"name": "Medio", "description": "Estrategia MinMax (Profundidad 2)", "strategy": HeuristicMinMaxMctsAdapter(strategy='minmax', depth=2)})
-    AI_PLAYER_CONFIG["azul"].append({"name": "Difícil", "description": "Estrategia MinMax (Profundidad 4)", "strategy": HeuristicMinMaxMctsAdapter(strategy='minmax', depth=4)})
-except Exception as e:
-    print(f"⚠️  Skipping Heuristic AI: {e}")
 
 def register_all_strategies():
     """
@@ -136,19 +133,34 @@ async def sync_ai_players(db: AsyncSession):
     # If RESET is requested, or if we want to ensure we are clean, we delete.
     # But since we want to be smart, if NOT reset, we try to append missing ones.
     
-    if RESET_DB_ON_STARTUP and ai_ids:
-        print(f"RESET_DB_ON_STARTUP is True. Deleting {len(ai_ids)} existing AI players and dependent games...")
+    if RESET_DB_ON_STARTUP:
+        print(f"RESET_DB_ON_STARTUP is True. Cleaning up AI players and games...")
         
-        # Cleanup logic (same as before)
-        await db.execute(delete(TicTacToeGame).where(or_(TicTacToeGame.player_x.in_(ai_ids), TicTacToeGame.player_o.in_(ai_ids))))
-        await db.execute(delete(ChessGame).where(or_(ChessGame.player_white.in_(ai_ids), ChessGame.player_black.in_(ai_ids))))
-        await db.execute(delete(Connect4Game).where(or_(Connect4Game.player_red.in_(ai_ids), Connect4Game.player_blue.in_(ai_ids))))
-        await db.execute(delete(AzulGame)) # Clean Azul games just in case
+        # Delete games involving AI players
+        if ai_ids:
+            await db.execute(delete(TicTacToeGame).where(or_(TicTacToeGame.player_x.in_(ai_ids), TicTacToeGame.player_o.in_(ai_ids))))
+            await db.execute(delete(ChessGame).where(or_(ChessGame.player_white.in_(ai_ids), ChessGame.player_black.in_(ai_ids))))
+            await db.execute(delete(Connect4Game).where(or_(Connect4Game.player_red.in_(ai_ids), Connect4Game.player_blue.in_(ai_ids))))
+        
+        # Clean Azul games (Unconditional as per previous logic)
+        await db.execute(delete(AzulGame)) 
         await db.commit()
 
+        # Delete ALL AI players
         await db.execute(delete(Player).where(Player.type == PlayerType.ai))
+        
+        # Also clean up common test users as requested (exact matches and patterns)
+        # Using specific patterns observed in user report
+        await db.execute(delete(Player).where(
+            or_(
+                Player.name.in_(['test', 'Test', 'pytest', 'chk_u1']),
+                Player.name.like('chk_%'),
+                Player.name.like('del_%')
+            )
+        ))
+        
         await db.commit()
-        print("All AI players deleted.")
+        print("All AI and Test players deleted.")
         ai_ids = [] # Reset list so we enter creation loop
 
     # If NOT reset, we just proceed to check/create each one.

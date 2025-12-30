@@ -1,3 +1,10 @@
+import logging
+import sys
+import os
+
+print(f"!!! MAIN ENTRY POINT LOADED FROM {__file__} !!!")
+print(f"!!! CWD: {os.getcwd()} !!!")
+
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 import redis.asyncio as redis_client

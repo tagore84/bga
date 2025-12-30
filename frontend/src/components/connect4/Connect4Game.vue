@@ -22,6 +22,7 @@
                 <div 
                     v-if="cell"
                     class="piece"
+                    :class="{ 'last-move': idx === lastMoveIndex }"
                     :style="{
                         left: ((idx % 7) * (100/7)) + '%',
                         top: (Math.floor(idx / 7) * (100/6)) + '%'
@@ -34,6 +35,20 @@
 
         <!-- Board Image (Overlay) -->
         <img :src="boardImg" class="board-overlay" alt="board" />
+
+        <!-- Winning Line Overlay -->
+        <svg v-if="winningLineCoords" class="winning-line-container">
+            <line 
+                :x1="winningLineCoords.x1" 
+                :y1="winningLineCoords.y1" 
+                :x2="winningLineCoords.x2" 
+                :y2="winningLineCoords.y2" 
+                stroke="yellow" 
+                stroke-width="3" 
+                stroke-linecap="round" 
+                class="winning-line-anim"
+            />
+        </svg>
 
         <!-- Click Columns (Transparent Overlays) -->
         <div class="click-layer">
@@ -49,7 +64,7 @@
       <div class="controls">
         <button v-if="canUndo" class="btn-undo" @click="undoMove">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-undo"><path d="M3 7v6h6"></path><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path></svg>
-            Deshacer
+            Undo Move
         </button>
         <button class="btn-exit" @click="goBack">Salir</button>
       </div>
@@ -93,7 +108,88 @@ const canUndo = computed(() => {
     return moves.value && moves.value.length > 0;
 });
 
+const lastMoveIndex = computed(() => {
+    if (!moves.value || moves.value.length === 0) return -1;
+    const lastCol = moves.value[moves.value.length - 1];
+    
+    // Find the highest piece in this column
+    for (let r = 0; r < 6; r++) {
+        const idx = r * 7 + lastCol;
+        if (board.value[idx]) return idx;
+    }
+    return -1;
+});
+
+const winningLine = ref(null); // { start: index, end: index }
+
+
+
+function findWinningLine(board, player) {
+    const piece = player; // "Red" or "Blue"
+    const ROWS = 6;
+    const COLS = 7;
+    
+    function getPiece(r, c) {
+        if (r < 0 || r >= ROWS || c < 0 || c >= COLS) return null;
+        return board[r * COLS + c];
+    }
+    
+    // Check horizontal
+    for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS - 3; c++) {
+            if ([0,1,2,3].every(i => getPiece(r, c+i) === piece)) {
+                return { start: r * COLS + c, end: r * COLS + c + 3 };
+            }
+        }
+    }
+    // Check vertical
+    for (let r = 0; r < ROWS - 3; r++) {
+        for (let c = 0; c < COLS; c++) {
+            if ([0,1,2,3].every(i => getPiece(r+i, c) === piece)) {
+                return { start: r * COLS + c, end: (r+3) * COLS + c };
+            }
+        }
+    }
+    // Check diagonal positive (slope down-right in visual? No, coords: r0=top. increasing r = down. increasing c = right.)
+    // Slope positive in array terms (r+, c+)
+    for (let r = 0; r < ROWS - 3; r++) {
+        for (let c = 0; c < COLS - 3; c++) {
+            if ([0,1,2,3].every(i => getPiece(r+i, c+i) === piece)) {
+                return { start: r * COLS + c, end: (r+3) * COLS + c + 3 };
+            }
+        }
+    }
+    // Check diagonal negative (r+, c-)
+    for (let r = 0; r < ROWS - 3; r++) {
+        for (let c = 3; c < COLS; c++) {
+             if ([0,1,2,3].every(i => getPiece(r+i, c-i) === piece)) {
+                return { start: r * COLS + c, end: (r+3) * COLS + c - 3 };
+            }
+        }
+    }
+    return null;
+}
+
+const winningLineCoords = computed(() => {
+    if (!winningLine.value) return null;
+    
+    const getCenter = (idx) => {
+        const r = Math.floor(idx / 7);
+        const c = idx % 7;
+        // Center x % = col * (100/7) + (100/14)
+        // Center y % = row * (100/6) + (100/12)
+        const x = (c * (100/7)) + (50/7);
+        const y = (r * (100/6)) + (50/6);
+        return { x, y };
+    }
+    
+    const start = getCenter(winningLine.value.start);
+    const end = getCenter(winningLine.value.end);
+    return { x1: start.x + '%', y1: start.y + '%', x2: end.x + '%', y2: end.y + '%' };
+});
+
 async function fetchState() {
+// ...
   const res = await fetch(`${API_BASE}/connect4/${gameId}`, {
     headers: { 'Authorization': `Bearer ${token}` }
   });
@@ -105,6 +201,14 @@ async function fetchState() {
   status.value = data.status;
   player_red.value = data.player_red_name;
   player_blue.value = data.player_blue_name;
+  
+  if (status.value === 'Red_won') {
+      winningLine.value = findWinningLine(board.value, 'Red');
+  } else if (status.value === 'Blue_won') {
+      winningLine.value = findWinningLine(board.value, 'Blue');
+  } else {
+      winningLine.value = null;
+  }
   
   if (data.config && data.config.moves) {
       moves.value = data.config.moves;
@@ -141,7 +245,7 @@ async function onClick(col) {
 }
 
 async function undoMove() {
-    if (!confirm("¿Seguro que quieres deshacer el último movimiento?")) return;
+    if (!confirm("Are you sure you want to undo the last move?")) return;
     try {
         const res = await fetch(`${API_BASE}/connect4/${gameId}/undo`, {
             method: 'POST',
@@ -180,7 +284,14 @@ onMounted(async () => {
             }
             
             if (msg.board) board.value = JSON.parse(msg.board);
-            if (msg.status) status.value = msg.status;
+            if (msg.status) {
+                status.value = msg.status;
+                if (status.value === 'Red_won') {
+                    winningLine.value = findWinningLine(board.value, 'Red');
+                } else if (status.value === 'Blue_won') {
+                    winningLine.value = findWinningLine(board.value, 'Blue');
+                }
+            }
             
             if (msg.by) {
                 currentTurn.value = msg.by === 'Red' ? 'Blue' : 'Red';
@@ -315,11 +426,30 @@ onBeforeUnmount(() => {
 }
 
 .btn-undo {
-    background-color: #f0ad4e;
-    color: white;
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: var(--text-primary);
+    padding: 0.6rem 1.2rem;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 600;
+    font-size: 1rem;
+    transition: all 0.2s ease;
 }
+
 .btn-undo:hover {
-    background-color: #ec971f;
+    background: rgba(255, 255, 255, 0.15);
+    box-shadow: 0 0 15px rgba(255, 255, 255, 0.1);
+    border-color: var(--text-primary);
+    transform: translateY(-2px);
+}
+
+.btn-undo svg {
+    width: 20px;
+    height: 20px;
 }
 
 .btn-exit {
@@ -329,9 +459,33 @@ onBeforeUnmount(() => {
 .btn-exit:hover {
     background-color: #c9302c;
 }
+/* Highlight for the last move */
+.piece.last-move img {
+    box-shadow: 0 0 15px 5px rgba(255, 255, 255, 0.8);
+    transform: scale(1.1);
+    transition: all 0.3s ease;
+    z-index: 10;
+}
 
-.icon-undo {
-    width: 18px;
-    height: 18px;
+.winning-line-container {
+    position: absolute;
+    top: 12px;
+    left: 19px;
+    width: calc(100% - 38px);
+    height: calc(100% - 27px);
+    z-index: 30;
+    pointer-events: none;
+    display: block;
+}
+.winning-line-anim {
+    stroke-dasharray: 100;
+    stroke-dashoffset: 100;
+    animation: dash 1s linear forwards;
+    filter: drop-shadow(0 0 5px orange);
+}
+@keyframes dash {
+  to {
+    stroke-dashoffset: 0;
+  }
 }
 </style>

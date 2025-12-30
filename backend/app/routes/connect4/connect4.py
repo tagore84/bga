@@ -276,6 +276,9 @@ async def make_move(
         player = await db.get(Player, player_id)
         ai = get_ai(player.name)
         
+        # DEBUG: Introspect AI object (REMOVED)
+
+
         ai_col = ai.select_move({
             "board": game.board,
             "current_turn": game.current_turn,
@@ -283,6 +286,15 @@ async def make_move(
         })
         
         board = game.board.copy()
+        if ai_col is None:
+            logger.error(f"AI {player.name} returned None for move!")
+            # Try to find any valid move to keep game alive
+            valid_cols = [c for c in range(COLS) if _get_piece(board, 0, c) is None]
+            if valid_cols:
+                ai_col = valid_cols[0]
+            else:
+                ai_col = 0 # Will fail in _drop_piece as column full
+
         idx = _drop_piece(board, ai_col, game.current_turn)
         if idx != -1: 
             status_val = _evaluate_board(board)
