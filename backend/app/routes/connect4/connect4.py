@@ -167,6 +167,57 @@ async def create_game(
     px = await db.get(Player, req.playerRedId)
     po = await db.get(Player, req.playerBlueId)
     
+    # Trigger AI if Red is AI
+    if req.playerRedType == "ai":
+        ai = get_ai(px.name)
+        if ai:
+            # Calculate AI Move
+            ai_col = ai.select_move({
+                "board": c4_game.board,
+                "current_turn": "Red",
+                "config": c4_game.config
+            })
+            
+            # Validate & Execute
+            board = list(c4_game.board)
+            if ai_col is None:
+                # Fallback random valid
+                valid_cols = [c for c in range(COLS) if _get_piece(board, 0, c) is None]
+                ai_col = valid_cols[0] if valid_cols else 0
+            
+            idx = _drop_piece(board, int(ai_col), "Red")
+            if idx != -1:
+                status_val = _evaluate_board(board)
+                
+                c4_game.board = board
+                c4_game.status = status_val
+                c4_game.current_turn = "Blue" if status_val == "in_progress" else c4_game.current_turn
+                
+                # Update Config Moves
+                config = dict(c4_game.config)
+                moves = list(config.get("moves", []))
+                moves.append(int(ai_col))
+                config["moves"] = moves
+                c4_game.config = config
+                
+                db.add(c4_game)
+                await db.commit()
+                await db.refresh(c4_game)
+                
+                try:
+                    await core_redis.redis_pool.xadd(
+                        f"connect4:{c4_game.id}",
+                        {
+                            "type": "move",
+                            "column": str(ai_col),
+                            "by": "Red",
+                            "board": json.dumps(c4_game.board),
+                            "status": c4_game.status
+                        }
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to publish AI move on create: {e}")
+
     return Connect4GameState(
         id=c4_game.id,
         board=c4_game.board,

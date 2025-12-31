@@ -15,6 +15,7 @@ from app.models.tictactoe.tictactoe import TicTacToeGame
 from app.models.chess.chess import ChessGame
 from app.models.azul.azul import AzulGame
 from app.models.connect4.connect4 import Connect4Game
+from app.models.nim.nim import NimGame
 
 # Chess Strategies
 from app.core.chess.ai_chess_minimax import MinimaxChessAI
@@ -33,6 +34,10 @@ from app.core.azul.ai_azul_random import RandomAzulAI
 from app.core.azul.random_plus_adapter import RandomPlusAdapter
 from app.core.azul.heuristic_min_max_mcts_adapter import HeuristicMinMaxMctsAdapter
 from app.core.azul.deep_mcts_player_adapter import AIAzulDeepMCTS
+
+# Nim Strategies
+from app.core.nim.ai_nim import NimAIExpert, NimAIIntermediate
+from app.core.wythoff.ai_wythoff import WythoffAI
 
 # Determine model path for Azul DeepMCTS
 AZUL_MODEL_PATH = os.path.join(os.path.dirname(__file__), "azul", "zero", "models", "best.pt")
@@ -74,6 +79,13 @@ AI_PLAYER_CONFIG = {
          {"name": "Chess Medio (IA)", "description": "IA Minimax (Profundidad 3)", "strategy": MinimaxChessAI(depth=3)},
          {"name": "Chess Difícil (IA)", "description": "IA Minimax (Profundidad 4)", "strategy": MinimaxChessAI(depth=4)},
          {"name": "Chess Extremo (IA)", "description": "IA Minimax (Profundidad 5)", "strategy": MinimaxChessAI(depth=5)}
+    ],
+    "nim": [
+         {"name": "Nim Misere (Experto)", "description": "IA Experta en Nim Misere", "strategy": NimAIExpert()},
+         {"name": "Nim Misere (Intermedio)", "description": "IA Nivel Intermedio", "strategy": NimAIIntermediate()},
+    ],
+    "wythoff": [
+        {"name": "Wythoff AI", "description": "IA Wythoff (Razón Áurea)", "strategy": WythoffAI()}
     ]
 }
 # Append experimental safely
@@ -105,7 +117,9 @@ async def seed_games(db: AsyncSession):
         ("tictactoe", "Juego clásico de tres en raya"),
         ("azul", "Juego de losetas y patrones inspirado en el Palacio Real de Évora"),
         ("chess", "Clásico Juego de Ajedrez"),
-        ("connect4", "Juego de estrategia vertical para conectar cuatro fichas")
+        ("connect4", "Juego de estrategia vertical para conectar cuatro fichas"),
+        ("nim", "Nim Misere: Quien toma el último objeto pierde"),
+        ("wythoff", "Wythoff Nim: Variante con dos montones y movimientos diagonales")
     ]
     for name, description in juegos:
         result = await db.execute(select(Game).where(Game.name == name))
@@ -140,6 +154,7 @@ async def sync_ai_players(db: AsyncSession):
             await db.execute(delete(TicTacToeGame).where(or_(TicTacToeGame.player_x.in_(ai_ids), TicTacToeGame.player_o.in_(ai_ids))))
             await db.execute(delete(ChessGame).where(or_(ChessGame.player_white.in_(ai_ids), ChessGame.player_black.in_(ai_ids))))
             await db.execute(delete(Connect4Game).where(or_(Connect4Game.player_red.in_(ai_ids), Connect4Game.player_blue.in_(ai_ids))))
+            await db.execute(delete(NimGame).where(or_(NimGame.player_1_id.in_(ai_ids), NimGame.player_2_id.in_(ai_ids))))
         
         # Clean Azul games (Unconditional as per previous logic)
         await db.execute(delete(AzulGame)) 

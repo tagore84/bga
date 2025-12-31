@@ -1,3 +1,4 @@
+```html
 <template>
   <div class="games-container p-4">
     <div class="header-section text-center mb-2">
@@ -24,6 +25,7 @@
           🗑️
         </button>
       </div>
+    
     </div>
   </div>
 </template>
@@ -43,6 +45,8 @@ function getGameIcon(name) {
   if (name === 'azul') return '💠'
   if (name === 'chess') return '♟️'
   if (name === 'connect4') return '🔴'
+  if (name === 'nim') return '🎋'
+  if (name === 'wythoff') return '⚡️'
   return '🎮'
 }
 
@@ -78,6 +82,10 @@ function selectGame(game) {
     router.push('/chessActive')
   } else if (game.name === 'connect4') {
     router.push('/connect4Active')
+  } else if (game.name === 'nim') {
+    router.push('/nimActive')
+  } else if (game.name === 'wythoff') {
+    router.push('/wythoffActive')
   } else {
     console.warn(`No config route defined for game ${game.name}`)
   }
