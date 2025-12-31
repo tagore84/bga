@@ -5,7 +5,6 @@ from app.core.ai_base import AIBase, register_ai
 
 from app.core.chess.pst import TABLES, PIECE_VALUES
 
-MATE_SCORE = 30000
 
 MATE_SCORE = 9999
 
