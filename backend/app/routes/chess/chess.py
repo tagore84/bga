@@ -242,7 +242,8 @@ async def process_ai_turns(game_id: int):
 
             # Apply AI Move
             try:
-                board = chess.Board(game.board_fen)
+                is_chess960 = game.config.get("chess960", False)
+                board = chess.Board(game.board_fen, chess960=is_chess960)
                 move = chess.Move.from_uci(ai_move_uci)
                 if move not in board.legal_moves:
                     logger.error(f"AI {player_obj.name} generated illegal move: {ai_move_uci}")
@@ -355,7 +356,12 @@ async def undo_move(
 
     new_moves = moves[:-undo_count]
     
-    board = chess.Board()
+    new_moves = moves[:-undo_count]
+    
+    start_fen = game.config.get("start_fen", chess.STARTING_FEN)
+    is_chess960 = game.config.get("chess960", False)
+    board = chess.Board(start_fen, chess960=is_chess960)
+    
     for m in new_moves:
         board.push(chess.Move.from_uci(m))
         
@@ -479,7 +485,8 @@ async def make_move(
             raise HTTPException(403, "Not your turn (Black)")
 
     # 3. Apply Move using python-chess
-    board = chess.Board(game.board_fen)
+    is_chess960 = game.config.get("chess960", False)
+    board = chess.Board(game.board_fen, chess960=is_chess960)
     
     try:
         move = chess.Move.from_uci(req.move_uci)

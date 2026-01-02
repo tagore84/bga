@@ -3,16 +3,21 @@ import json
 from datetime import datetime
 
 class AzulGameLogger:
-    def __init__(self, base_dir="logs/azul_games"):
+    def __init__(self, base_dir="logs/azul_games", enabled=False):
         # Ensure absolute path based on backend root if needed, but assuming CWD is backend root
         # If running in docker, /app is root.
         self.base_dir = base_dir
-        os.makedirs(self.base_dir, exist_ok=True)
+        self.enabled = enabled
+        if self.enabled:
+            os.makedirs(self.base_dir, exist_ok=True)
 
     def log_move(self, game_id: int, move: dict, player_id: int, state_before: dict, state_after: dict):
         """
         Logs a move event to the game's log file.
         """
+        if not self.enabled:
+            return
+
         filename = os.path.join(self.base_dir, f"game_{game_id}.jsonl")
         
         entry = {

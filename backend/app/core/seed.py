@@ -96,7 +96,7 @@ AI_PLAYER_CONFIG = {
 }
 # Append experimental safely
 try:
-    exp_strategy = AIAzulDeepMCTS(model_path=AZUL_MODEL_PATH, device=AZUL_MODEL_DEVICE, mcts_iters=300, cpuct=1.0, single_player_mode=True)
+    exp_strategy = AIAzulDeepMCTS(model_path=AZUL_MODEL_PATH, device=AZUL_MODEL_DEVICE, mcts_iters=300, cpuct=1.0, temperature=0.0, single_player_mode=True)
     AI_PLAYER_CONFIG["azul"].append(
         {"name": "Experimental (IA)", "description": "IA basada en AlphaZero (MCTS + Red Neuronal)", "strategy": exp_strategy}
     )

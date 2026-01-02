@@ -11,9 +11,10 @@ from mcts.mcts import MCTS
 from .base_player import BasePlayer
 
 class DeepMCTSPlayer(BasePlayer):
-    def __init__(self, model_path, device='cpu', mcts_iters=300, cpuct=1.0, single_player_mode=True):
+    def __init__(self, model_path, device='cpu', mcts_iters=300, cpuct=1.0, temperature=0.0, single_player_mode=True):
         super().__init__()
         self.device = torch.device(device)
+        self.temperature = temperature
         # Load checkpoint and extract model state
         checkpoint = torch.load(model_path, map_location=self.device)
         state_dict = checkpoint.get('model_state', checkpoint)
@@ -90,8 +91,8 @@ class DeepMCTSPlayer(BasePlayer):
         
         self.mcts.run(self.prototype_env)
         # Select and return an action tuple
-        # Use temperature=0.0 for greedy selection (Validation Mode)
-        action = self.mcts.select_action(temperature=0.0)
+        # Use configured temperature
+        action = self.mcts.select_action(temperature=self.temperature)
         return action
 
     def visualize(self, obs: dict):

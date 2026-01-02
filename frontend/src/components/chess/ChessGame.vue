@@ -35,6 +35,19 @@
                     <ChessPiece :piece="p" />
                 </div>
             </div>
+            <!-- Left Side Castling Button -->
+            <div v-if="isChess960" class="castle-btn-container mt-auto">
+                <button 
+                    v-if="leftCastleType"
+                    class="btn-secondary castle-side-btn" 
+                    :disabled="!canCastle(leftCastleType)"
+                    @click="triggerCastle(leftCastleType)"
+                    :title="castleTooltip(leftCastleType)"
+                >
+                    <span class="castle-icon">{{ leftCastleType === 'short' ? '♔➔♖' : '♖➔♔' }}</span>
+                    {{ leftCastleType === 'short' ? 'Corto' : 'Largo' }}
+                </button>
+            </div>
         </div>
 
         <div class="board-wrapper">
@@ -75,10 +88,25 @@
                     <ChessPiece :piece="p" />
                 </div>
             </div>
+            <!-- Right Side Castling Button -->
+            <div v-if="isChess960" class="castle-btn-container mt-auto">
+                <button 
+                    v-if="rightCastleType"
+                    class="btn-secondary castle-side-btn" 
+                    :disabled="!canCastle(rightCastleType)"
+                    @click="triggerCastle(rightCastleType)"
+                    :title="castleTooltip(rightCastleType)"
+                >
+                     <span class="castle-icon">{{ rightCastleType === 'short' ? '♔➔♖' : '♖➔♔' }}</span>
+                     {{ rightCastleType === 'short' ? 'Corto' : 'Largo' }}
+                </button>
+            </div>
         </div>
     </div>
     
     <div class="controls mt-2">
+
+
         <label class="toggle-container">
             <input type="checkbox" v-model="showHints">
             Mostrar posibles movimientos
@@ -117,7 +145,8 @@ export default {
             isCheck: false,
             chessInstance: new Chess(),
             showHints: false,
-            legalMoves: [] // List of legal moves for selected square
+            legalMoves: [], // List of legal moves for selected square
+            allLegalMoves: [] // Cache of all legal moves for current position
         }
     },
     computed: {
@@ -204,7 +233,24 @@ export default {
             if (!this.game.config || !this.game.config.moves || this.game.config.moves.length === 0) return false;
             
             return true;
+        },
+        isChess960() {
+            const val = this.game && (this.game.config.variant === 'chess960' || this.game.config.chess960 === true);
+
+            return val;
+        },
+
+        leftCastleType() {
+            // If black player (view rotated), Left is Short side (King side).
+            // If white player (standard), Left is Long side (Queen side).
+            return this.isBlackPlayer ? 'short' : 'long';
+        },
+        rightCastleType() {
+             // If black player (view rotated), Right is Long side (Queen side).
+            // If white player (standard), Right is Short side (King side).
+            return this.isBlackPlayer ? 'long' : 'short';
         }
+
     },
     async created() {
         const gameId = this.$route.params.id;
@@ -216,6 +262,207 @@ export default {
         if (this.ws) this.ws.close();
     },
     methods: {
+        canCastle(type) {
+            // Manual check for button enablement
+            // 1. Must have rights (FEN)
+            if (!this.hasCastlingRight(type)) return false;
+            
+            // 2. Must not be in check
+            if (this.isCheck) return false;
+            
+            // 3. Path must be clear (basic 960 check)
+            if (this.game && this.game.config.chess960) {
+                 return this.get960BlockingReason(type) === null;
+            }
+            
+            // Fallback to chess.js for standard
+            return type === 'short' ? this.canCastleShort : this.canCastleLong;
+        },
+        get960BlockingReason(type) {
+             if (!this.boardMatrix || this.boardMatrix.length !== 8) return "Tablero no cargado";
+             
+             // Find King and Target Rook
+             const isWhite = this.game.current_turn === 'white';
+             const kingChar = isWhite ? 'K' : 'k';
+             const rookChar = isWhite ? 'R' : 'r';
+             
+             let kR = -1, kF = -1;
+             for (let r=0; r<8; r++) {
+                 for (let c=0; c<8; c++) {
+                     if (this.boardMatrix[r][c] === kingChar) {
+                         kR = r; kF = c; break;
+                     }
+                 }
+             }
+             if (kR === -1) return "Rey no encontrado";
+             
+             let targetRookFile = -1;
+             // Scan for rook based on type
+             if (type === 'short') {
+                 // Scan Right
+                 for (let c = kF + 1; c < 8; c++) {
+                     if (this.boardMatrix[kR][c] === rookChar) { 
+                         targetRookFile = c; 
+                         break; 
+                     }
+                 }
+             } else {
+                 // Scan Left
+                 for (let c = kF - 1; c >= 0; c--) {
+                     if (this.boardMatrix[kR][c] === rookChar) { 
+                         targetRookFile = c; 
+                         break; 
+                     }
+                 }
+             }
+             
+             if (targetRookFile === -1) return "Torre de enroque no encontrada o bloqueada";
+             
+             const files = "ABCDEFGH";
+             const getSquareName = (c) => files[c] + (isWhite ? '1' : '8');
+
+             // Check path constraints
+             // 1. Squares between King and Rook must be empty
+             const start = Math.min(kF, targetRookFile) + 1;
+             const end = Math.max(kF, targetRookFile);
+             for (let c = start; c < end; c++) {
+                 if (this.boardMatrix[kR][c] !== null) {
+                     return `Pieza entre Rey y Torre (${getSquareName(c)})`;
+                 }
+             }
+             
+             // 2. Destination squares for King (and Rook) plus transit
+             const finalKingFile = type === 'short' ? 6 : 2; // G or C
+             const finalRookFile = type === 'short' ? 5 : 3; // F or D
+             
+             // Check path for King to FinalKingFile
+             let step = finalKingFile > kF ? 1 : -1;
+             if (kF !== finalKingFile) {
+                 for (let c = kF + step; c !== finalKingFile + step; c += step) {
+                     if (c === targetRookFile || c === kF) continue;
+                     if (this.boardMatrix[kR][c] !== null) {
+                        return `Camino del Rey bloqueado en ${getSquareName(c)}`;
+                     }
+                 }
+             }
+             
+             // Check path for Rook to FinalRookFile
+             step = finalRookFile > targetRookFile ? 1 : -1;
+             if (targetRookFile !== finalRookFile) {
+                 for (let c = targetRookFile + step; c !== finalRookFile + step; c += step) {
+                     if (c === kF || c === targetRookFile) continue;
+                     if (this.boardMatrix[kR][c] !== null) {
+                         return `Camino de Torre bloqueado en ${getSquareName(c)}`;
+                     }
+                 }
+             }
+             
+             return null; // All clear
+        },
+        castleTooltip(type) {
+             const enabled = this.canCastle(type);
+             const label = type === 'short' ? 'Enroque Corto (O-O)' : 'Enroque Largo (O-O-O)';
+             if (enabled) return label;
+             
+             return `${label}: ${this.disabledReason(type)}`;
+        },
+        disabledReason(type) {
+            // Check rights first
+            if (!this.game || !this.game.board_fen) return "Game data missing";
+            
+            // Check Check
+            if (this.isCheck) {
+                return "No puedes enrocar mientras estás en Jaque";
+            }
+
+            if (!this.hasCastlingRight(type)) {
+                return "Derechos de enroque perdidos";
+            }
+            
+            if (this.game && this.game.config.chess960) {
+                 const reason = this.get960BlockingReason(type);
+                 if (reason) return reason;
+            }
+            
+            // Fallback: Obstruction
+            return "Camino bloqueado o casillas atacadas bajo el enroque";
+        },
+        hasCastlingRight(type) {
+             if (!this.game || !this.game.board_fen) return false;
+             
+
+
+            // 1. Get FEN rights part
+            const fenParts = this.game.board_fen.split(' ');
+            const rightsFen = fenParts[2] || '-';
+            
+            if (rightsFen === '-') {
+                return false;
+            }
+
+            const isWhite = this.game.current_turn === 'white';
+            
+            // Standard check (fast path)
+            const map = isWhite ? { short: 'K', long: 'Q' } : { short: 'k', long: 'q' };
+            const neededChar = map[type];
+            
+            if (!neededChar) {
+                console.warn("Unknown castling type:", type);
+                return false;
+            }
+            
+            if (rightsFen.includes(neededChar)) return true;
+
+            // 2. Chess 960 Check (File-letter based rights)
+            // We need to know if there is a rook available on the correct side of the King.
+            
+            // Find King's file
+            let kingFile = -1;
+            const kingPiece = isWhite ? 'K' : 'k';
+            
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    if (this.boardMatrix[r][c] === kingPiece) {
+                        kingFile = c; // 0..7
+                        break;
+                    }
+                }
+                if (kingFile !== -1) break;
+            }
+            
+
+
+            if (kingFile === -1) return false; // Should not happen
+
+            // Parse rights characters for this player
+            // White: A-H, Black: a-h
+            const allowedChars = isWhite ? "ABCDEFGH" : "abcdefgh";
+            
+            for (let i = 0; i < rightsFen.length; i++) {
+                const char = rightsFen[i];
+                if (allowedChars.includes(char)) {
+                    // Convert to file index (0-7)
+                    // 'A'/'a' = 0
+                    const code = char.toLowerCase().charCodeAt(0) - 97; // 'a' code is 97
+                    
+                    if (type === 'short') {
+                         // Short/Kingside: Rook must be to the RIGHT of the King (file > kingFile)
+                         if (code > kingFile) {
+
+                             return true;
+                         }
+                    } else {
+                         // Long/Queenside: Rook must be to the LEFT of the King (file < kingFile)
+                         if (code < kingFile) {
+
+                             return true;
+                         }
+                    }
+                }
+            }
+
+            return false;
+        },
         async fetchCurrentUser() {
              try {
                 const token = localStorage.getItem('token');
@@ -246,6 +493,7 @@ export default {
                 }
                 
                 this.parseFen(this.game.board_fen);
+                this.updateAllLegalMoves();
                 
                 // Restore last move
                 if (this.game.config && this.game.config.moves && this.game.config.moves.length > 0) {
@@ -301,6 +549,7 @@ export default {
 
                      this.selectedSquare = null; 
                      this.legalMoves = [];
+                     this.updateAllLegalMoves();
                 } else if (data.type === 'undo') {
                     this.game.board_fen = data.fen;
                     this.fetchGame(gameId);
@@ -541,6 +790,133 @@ export default {
             } catch (e) {
                 console.error("Undo failed", e);
                 alert("Failed to undo move: " + (e.response?.data?.detail || e.message));
+            }
+        },
+        updateAllLegalMoves() {
+            try {
+                this.allLegalMoves = this.chessInstance.moves({ verbose: true });
+            } catch (e) {
+                console.error("Error generating moves", e);
+                this.allLegalMoves = [];
+            }
+        },
+        getCastlingMove(type) {
+            // type: 'short' or 'long'
+            // Debug: print all moves
+            // console.log("Searching for castle:", type, "in", this.allLegalMoves);
+            
+            if (!this.canMove()) return null;
+
+            // Flags: k = kingside (short), q = queenside (long)
+            const flag = type === 'short' ? 'k' : 'q';
+            const san = type === 'short' ? 'O-O' : 'O-O-O';
+            
+            return this.allLegalMoves.find(m => {
+                // Check standard flags
+                if (m.flags.includes(flag)) return true;
+                // Check SAN
+                if (m.san === san) return true;
+                return false;
+            });
+        },
+        triggerCastle(type) {
+            if (this.isChess960) {
+                 // Manual UCI construction for Chess 960: KingPos + RookPos
+                 
+                 // 1. Find King
+                 const isWhite = this.game.current_turn === 'white';
+                 const kingChar = isWhite ? 'K' : 'k';
+                 const rookChar = isWhite ? 'R' : 'r';
+                 let kR = -1, kF = -1;
+                 
+                 // Scan board
+                 for (let r=0; r<8; r++) {
+                     for (let c=0; c<8; c++) {
+                         if (this.boardMatrix[r][c] === kingChar) {
+                             kR = r; kF = c; break;
+                         }
+                     }
+                     if (kR !== -1) break;
+                 }
+                 
+                 if (kR === -1) {
+                     console.error("King not found for castling");
+                     return;
+                 }
+                 
+                 // 2. Find Target Rook by scanning board
+                 // In 960, King is always between rooks.
+                 // Short castle = Rook to the right (higher file index)
+                 // Long castle = Rook to the left (lower file index)
+                 
+                 let targetRookFile = -1;
+                 
+                 if (type === 'short') {
+                     // Scan right from King
+                     for (let c = kF + 1; c < 8; c++) {
+                         if (this.boardMatrix[kR][c] === rookChar) {
+                             targetRookFile = c;
+                             // Use the outermost rook? Usually there is only one to the right.
+                             // But if multiple (promotions?), standard castling uses the 'original' one.
+                             // We'll take the first one we find for now, or maybe the last one?
+                             // Usually in 960 start pos there is exactly one.
+                             // If we assume standard 960 properties, just taking the first one is likely correct.
+                             break;
+                         }
+                     }
+                 } else {
+                     // Scan left from King
+                     for (let c = kF - 1; c >= 0; c--) {
+                         if (this.boardMatrix[kR][c] === rookChar) {
+                             targetRookFile = c;
+                             break;
+                         }
+                     }
+                 }
+                 
+                 if (targetRookFile !== -1) {
+                     // Construct UCI: King File+Rank + Rook File+Rank
+                     // Ranks are: White=1 (matrix 7), Black=8 (matrix 0)
+                     const rankChar = isWhite ? '1' : '8';
+                     const files = "abcdefgh";
+                     
+                     const fromStr = files[kF] + rankChar;
+                     const toStr = files[targetRookFile] + rankChar;
+                     
+                     const uci = fromStr + toStr;
+
+                     this.sendMove(uci);
+                     return;
+                 }
+                 
+                 console.warn("Could not find suitable rook for 960 castling via board scan", type, "King at", kF);
+            }
+
+            // Standard Logic (or fallback)
+
+            const move = this.getCastlingMove(type);
+
+            
+            if (move) {
+                let finalUci = move.from + move.to;
+                if (move.promotion) finalUci += move.promotion;
+
+                this.sendMove(finalUci);
+            } else {
+                console.warn("No castling move found for", type);
+            }
+        },
+
+        async sendMove(uci) {
+             try {
+                const token = localStorage.getItem('token');
+                await axios.post(`${API_BASE}/chess/${this.game.id}/move`, 
+                    { move_uci: uci },
+                    { headers: { Authorization: `Bearer ${token}` } }
+                );
+            } catch (e) {
+                console.error(e);
+                alert("Move failed: " + (e.response?.data?.detail || e.message));
             }
         }
     }
@@ -786,6 +1162,69 @@ export default {
 
 .btn-danger {
     margin-top: 0; /* Override */
+}
+
+.btn-secondary {
+    background: linear-gradient(145deg, rgba(70, 70, 70, 0.6), rgba(40, 40, 40, 0.8));
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: #e0e0e0;
+    padding: 0.8rem 1.2rem;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    font-weight: bold;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    transition: all 0.2s ease-in-out;
+}
+.btn-secondary:hover:not(:disabled) {
+    background: linear-gradient(145deg, rgba(90, 90, 90, 0.7), rgba(60, 60, 60, 0.9));
+    transform: translateY(-2px);
+    box-shadow: 0 6px 10px rgba(0,0,0,0.4);
+    border-color: rgba(255, 255, 255, 0.6);
+    color: #fff;
+}
+/* Active/Enabled State specific for castling to make it 'selectable' */
+.btn-secondary:not(:disabled) {
+    border-color: #4ade80; /* Greenish border to show it's ready */
+    color: #4ade80; 
+}
+.btn-secondary:not(:disabled):hover {
+    background: rgba(74, 222, 128, 0.15); /* Green tint on hover */
+    color: #4ade80;
+}
+
+.btn-secondary:disabled {
+    background: rgba(30, 30, 30, 0.3);
+    border-color: rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.2);
+    box-shadow: none;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.castle-btn-container {
+    width: 100%;
+    margin-top: auto; /* Pushes to bottom in flex column */
+    display: flex;
+    justify-content: center;
+    padding-top: 1rem;
+}
+
+.castle-side-btn {
+    width: 100%;
+    justify-content: center;
+    font-size: 0.9rem;
+    padding: 0.5rem;
+}
+
+@media (max-width: 900px) {
+    .castle-btn-container {
+        margin-top: 0;
+        width: auto;
+        padding-top: 0;
+        margin-left: 10px;
+    }
 }
 
 .btn-undo {
