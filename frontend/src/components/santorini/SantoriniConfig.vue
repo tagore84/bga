@@ -1,25 +1,25 @@
 <template>
   <div class="glass-panel config-container">
-    <h2 class="text-center mb-1">Nueva Partida de Conecta Cuatro</h2>
-    <p class="text-center mb-3" style="color: var(--text-secondary)">Selecciona los contrincantes</p>
+    <h2 class="text-center mb-1">Nueva Partida de Santorini</h2>
+    <p class="text-center mb-3" style="color: var(--text-secondary)">Configura tu partida</p>
 
     <div v-if="error" class="error text-center mb-2">{{ error }}</div>
 
     <div class="board-layout">
-        <!-- Red Player (Left) -->
-        <div class="player-slot red-slot">
-            <label class="player-label red-label">🔴 Jugador Rojo</label>
-            <div class="avatar-ph red-bg"></div>
-
+        <!-- Yellow Player (Left) - Santorini P1 -->
+        <div class="player-slot yellow-slot">
+            <label class="player-label yellow-label">� Jugador 1</label>
+            <div class="avatar-ph yellow-bg"></div>
+            
             <!-- Type Toggle -->
             <div class="type-toggle">
-                <button @click="redType = 'human'" :class="{ active: redType === 'human' }">Humano</button>
-                <button @click="redType = 'ai'" :class="{ active: redType === 'ai' }">IA</button>
+                <button @click="p1Type = 'human'" :class="{ active: p1Type === 'human' }">Humano</button>
+                <button @click="p1Type = 'ai'" :class="{ active: p1Type === 'ai' }">IA</button>
             </div>
 
-            <select v-model="playerRed" class="glass-select">
+            <select v-model="p1Id" class="glass-select">
                 <option :value="null" disabled>Seleccionar...</option>
-                <option v-for="player in (redType === 'human' ? humans : ais)" :key="player.id" :value="player.id">
+                <option v-for="player in (p1Type === 'human' ? humans : ais)" :key="player.id" :value="player.id">
                     {{ player.name }}
                 </option>
             </select>
@@ -30,20 +30,20 @@
             <span class="vs-text">VS</span>
         </div>
 
-        <!-- Blue Player (Right) -->
-        <div class="player-slot blue-slot">
-            <label class="player-label blue-label">🔵 Jugador Azul</label>
-            <div class="avatar-ph blue-bg"></div>
-            
+        <!-- Red Player (Right) - Santorini P2 -->
+        <div class="player-slot red-slot">
+            <label class="player-label red-label">🔴 Jugador 2</label>
+            <div class="avatar-ph red-bg"></div>
+
              <!-- Type Toggle -->
             <div class="type-toggle">
-                <button @click="blueType = 'human'" :class="{ active: blueType === 'human' }">Humano</button>
-                <button @click="blueType = 'ai'" :class="{ active: blueType === 'ai' }">IA</button>
+                <button @click="p2Type = 'human'" :class="{ active: p2Type === 'human' }">Humano</button>
+                <button @click="p2Type = 'ai'" :class="{ active: p2Type === 'ai' }">IA</button>
             </div>
 
-            <select v-model="playerBlue" class="glass-select">
+            <select v-model="p2Id" class="glass-select">
                  <option :value="null" disabled>Seleccionar...</option>
-                <option v-for="player in (blueType === 'human' ? humans : ais)" :key="player.id" :value="player.id">
+                <option v-for="player in (p2Type === 'human' ? humans : ais)" :key="player.id" :value="player.id">
                      {{ player.name }}
                 </option>
             </select>
@@ -52,8 +52,8 @@
 
     <div class="actions mt-3">
         <button @click="goBack" class="btn-secondary">Volver</button>
-        <button @click="createGame" :disabled="!isValid" class="btn-primary">
-            Comenzar Partida
+        <button @click="createGame" :disabled="!isValid || creating" class="btn-primary">
+            {{ creating ? 'Creando...' : 'Comenzar Partida' }}
         </button>
     </div>
   </div>
@@ -65,100 +65,108 @@ import { useRouter } from 'vue-router'
 import { API_BASE } from '../../config'
 
 const router = useRouter()
+const p1Type = ref('human')
+const p2Type = ref('human')
+const p1Id = ref(null)
+const p2Id = ref(null)
 const humans = ref([])
 const ais = ref([])
+const creating = ref(false)
 const error = ref(null)
 
-const playerRed = ref(null)
-const playerBlue = ref(null)
-const redType = ref('human')
-const blueType = ref('human')
-
-const isValid = computed(() => playerRed.value && playerBlue.value)
-
-onMounted(async () => {
-    try {
-        const token = localStorage.getItem('token')
-        
-        // 1. Fetch available games to find "connect4" ID
-        const resGames = await fetch(`${API_BASE}/games`)
-        if (!resGames.ok) throw new Error('Error al cargar juegos')
-        const gamesData = await resGames.json()
-        const allGames = gamesData.games ?? gamesData
-        const c4Game = allGames.find(g => g.name === 'connect4')
-        
-        // 2. Fetch players
-        const resPlayers = await fetch(`${API_BASE}/players/`, {
-            headers: { Authorization: `Bearer ${token}` }
-        })
-        if (!resPlayers.ok) throw new Error('No se pudieron cargar los jugadores')
-        const rawPlayers = await resPlayers.json()
-        
-        // 3. Filter
-        humans.value = rawPlayers.filter(p => p.type === 'human')
-        
-        if (c4Game) {
-            ais.value = rawPlayers.filter(p => p.type === 'ai' && p.game_id === c4Game.id)
-        } else {
-            ais.value = []
-        }
-        
-    } catch (e) {
-        console.error(e)
-        error.value = e.message
-    }
+const isValid = computed(() => {
+  return p1Id.value && p2Id.value
 })
+
+async function fetchPlayers() {
+  try {
+    const token = localStorage.getItem('token')
+    
+    // 1. Fetch games to find Santorini ID
+    const resGames = await fetch(`${API_BASE}/games`)
+    if (!resGames.ok) throw new Error('Error al cargar juegos')
+    const gamesData = await resGames.json()
+    const allGames = gamesData.games ?? gamesData
+    const santoriniGame = allGames.find(g => g.name === 'santorini')
+    
+    // 2. Fetch players
+    const resPlayers = await fetch(`${API_BASE}/players`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+    const data = await resPlayers.json()
+    
+    // 3. Filter
+    humans.value = data.filter(p => p.type === 'human')
+    
+    if (santoriniGame) {
+         ais.value = data.filter(p => p.type === 'ai' && p.game_id === santoriniGame.id)
+    } else {
+         console.warn("Santorini game not found in DB")
+         ais.value = []
+    }
+    
+    // Auto-select current user for P1
+    if (token) {
+        const username = JSON.parse(atob(token.split('.')[1])).sub
+        const me = data.find(p => p.name === username)
+        if (me) {
+            p1Id.value = me.id
+        }
+    }
+  } catch (e) {
+    console.error(e)
+    error.value = "Error al cargar datos iniciales"
+  }
+}
 
 function goBack() {
   router.push('/games')
 }
 
 async function createGame() {
-    error.value = null
-    const pRedId = playerRed.value
-    const pBlueId = playerBlue.value
-  
-    if (!pRedId || !pBlueId) {
-        error.value = "Selecciona ambos jugadores"
-        return
-    }
+  if (!p1Id.value) return error.value = 'Selecciona Jugador 1'
+  if (!p2Id.value) return error.value = 'Selecciona Jugador 2'
 
-    const selRed = (redType.value === 'human' ? humans: ais).value.find(p => p.id === parseInt(pRedId))
-    const selBlue = (blueType.value === 'human' ? humans: ais).value.find(p => p.id === parseInt(pBlueId))
+  creating.value = true
+  error.value = null
 
+  try {
     const payload = {
-        game_name: 'connect4',
-        playerRedType: selRed.type || 'human',
-        playerRedId: parseInt(pRedId),
-        playerBlueType: selBlue.type || 'human',
-        playerBlueId: parseInt(pBlueId)
+      game_name: 'Santorini',
+      playerP1Type: p1Type.value,
+      playerP1Id: p1Id.value,
+      playerP2Type: p2Type.value,
+      playerP2Id: p2Id.value
     }
 
-    try {
-        const token = localStorage.getItem('token')
-        const res = await fetch(`${API_BASE}/connect4/`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${token}`
-            },
-            body: JSON.stringify(payload)
-        })
-        if (!res.ok) {
-             const txt = await res.text()
-             throw new Error(txt || res.status)
-        }
-        const data = await res.json()
-        router.push(`/connect4/${data.id}`)
-    } catch (e) {
-        error.value = e.message
-    }
+    const res = await fetch(`${API_BASE}/santorini`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      },
+      body: JSON.stringify(payload)
+    })
+
+    if (!res.ok) throw new Error('Error al crear la partida')
+    
+    const game = await res.json()
+    router.push(`/santorini/${game.id}`)
+  } catch (e) {
+    error.value = e.message
+  } finally {
+    creating.value = false
+  }
 }
+
+onMounted(() => {
+  fetchPlayers()
+})
 </script>
 
 <style scoped>
 .config-container {
-  max-width: 700px;
+  max-width: 800px;
   margin: 3rem auto;
   padding: 3rem;
   background: var(--glass-bg);
@@ -205,7 +213,7 @@ async function createGame() {
     letter-spacing: 1px;
 }
 .red-label { color: #ff6b6b; text-shadow: 0 0 10px rgba(255,107,107,0.3); }
-.blue-label { color: #4dabf7; text-shadow: 0 0 10px rgba(77,171,247,0.3); }
+.yellow-label { color: #fcc419; text-shadow: 0 0 10px rgba(252,196,25,0.3); }
 
 .avatar-ph {
     width: 80px;
@@ -215,7 +223,7 @@ async function createGame() {
     box-shadow: 0 5px 15px rgba(0,0,0,0.3);
 }
 .red-bg { background: linear-gradient(135deg, #ff6b6b, #c92a2a); }
-.blue-bg { background: linear-gradient(135deg, #4dabf7, #1864ab); }
+.yellow-bg { background: linear-gradient(135deg, #fcc419, #f08c00); }
 
 .type-toggle {
     display: flex;
@@ -242,7 +250,7 @@ async function createGame() {
     font-weight: bold;
 }
 
-.glass-select {
+.glass-input, .glass-select {
   width: 100%;
   background: rgba(0, 0, 0, 0.4);
   border: 1px solid var(--border-light);
@@ -256,7 +264,7 @@ async function createGame() {
   transition: all 0.2s;
 }
 
-.glass-select:focus {
+.glass-input:focus, .glass-select:focus {
   border-color: var(--primary);
   box-shadow: 0 0 0 2px var(--primary-glow);
   background: rgba(0,0,0,0.6);

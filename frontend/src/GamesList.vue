@@ -47,6 +47,7 @@ function getGameIcon(name) {
   if (name === 'connect4') return '🔴'
   if (name === 'nim') return '🎋'
   if (name === 'wythoff') return '⚡️'
+  if (name === 'santorini') return '🏛️'
   return '🎮'
 }
 
@@ -86,6 +87,8 @@ function selectGame(game) {
     router.push('/nimActive')
   } else if (game.name === 'wythoff') {
     router.push('/wythoffActive')
+  } else if (game.name === 'santorini') {
+    router.push('/santoriniActive')
   } else {
     console.warn(`No config route defined for game ${game.name}`)
   }

@@ -52,51 +52,65 @@
               @click.stop="toggleItemRemoval(index, n)"
             >
             </div>
+            <!-- Ghost items -->
+            <div
+                v-if="ghostItems[index]"
+                v-for="g in ghostItems[index]"
+                :key="'ghost-' + g"
+                class="item ghost"
+            ></div>
           </div>
           <div class="pile-count">{{ count }}</div>
         </div>
       </div>
 
-      <div class="controls" v-if="isMyTurn && game.status === 'in_progress'">
-          
-        <!-- Diagonal Toggle -->
-        <div class="mode-switch">
-           <label class="switch-label">
-              <input type="checkbox" v-model="isDiagonal" :disabled="!canGoDiagonal">
-              <span class="checkmark"></span>
-              Movimiento Diagonal (Ambas filas)
-           </label>
-        </div>
-
-        <div v-if="hasSelection" class="action-panel">
-            <p v-if="!isDiagonal">
-                Retirar <strong>{{ itemsToRemove }}</strong> objeto(s) de la Fila {{ selectedPile + 1 }}
-            </p>
-            <p v-else>
-                Retirar <strong>{{ itemsToRemove }}</strong> objeto(s) de <strong>AMBAS</strong> filas
-            </p>
-
-          <input 
-            type="range" 
-            min="1" 
-            :max="maxRemovable" 
-            v-model.number="itemsToRemove"
-            class="range-slider"
-          />
-          <div class="buttons">
-             <button @click="cancelSelection" class="btn-cancel">Cancelar</button>
-             <button @click="submitMove" class="btn-confirm" :disabled="itemsToRemove < 1">Confirmar Movimiento</button>
+      <div class="controls">
+        <div v-if="isMyTurn && game.status === 'in_progress'">
+            
+          <!-- Diagonal Toggle -->
+          <div class="mode-switch">
+             <label class="switch-label">
+                <input type="checkbox" v-model="isDiagonal" :disabled="!canGoDiagonal">
+                <span class="checkmark"></span>
+                Movimiento Diagonal (Ambas filas)
+             </label>
+          </div>
+  
+          <div v-if="hasSelection" class="action-panel">
+              <p v-if="!isDiagonal">
+                  Retirar <strong>{{ itemsToRemove }}</strong> objeto(s) de la Fila {{ selectedPile + 1 }}
+              </p>
+              <p v-else>
+                  Retirar <strong>{{ itemsToRemove }}</strong> objeto(s) de <strong>AMBAS</strong> filas
+              </p>
+  
+            <input 
+              type="range" 
+              min="1" 
+              :max="maxRemovable" 
+              v-model.number="itemsToRemove"
+              class="range-slider"
+            />
+            <div class="buttons">
+               <button @click="cancelSelection" class="btn-cancel">Cancelar</button>
+               <button @click="submitMove" class="btn-confirm" :disabled="itemsToRemove < 1">Confirmar Movimiento</button>
+            </div>
+          </div>
+          <div v-else class="instruction">
+            Selecciona una fila o activa Diagonal para eliminar objetos.
           </div>
         </div>
-        <div v-else class="instruction">
-          Selecciona una fila o activa Diagonal para eliminar objetos.
+        <div v-else-if="game.status === 'in_progress'" class="instruction">
+             Espera tu turno...
         </div>
+
+        <button class="btn-exit" @click="goBack">Salir</button>
       </div>
       
       <div v-if="game.status !== 'in_progress'" class="game-over">
         <h3>Fin de la partida</h3>
         <p>{{ statusMessage }}</p>
-        <button @click="$router.push('/wythoffActive')" class="btn-home">Volver</button>
+        <button @click="goBack" class="btn-home">Volver</button>
       </div>
 
     </div>
@@ -106,7 +120,7 @@
 <script>
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { API_BASE } from '../../config';
+import { API_BASE, WS_BASE } from '../../config';
 
 export default {
   name: 'WythoffGame',
@@ -126,6 +140,15 @@ export default {
     const selectedPile = ref(null); 
     const itemsToRemove = ref(1);
     const isDiagonal = ref(false); // New mode
+    
+
+    
+    // Ghost Items
+    // Ghost Items
+    const previousBoard = ref(null);
+    const previousTurn = ref(null);
+    const ghostItems = ref({}); 
+    const lastHumanMove = ref(null);
     
     const intervalId = ref(null);
 
@@ -303,14 +326,23 @@ export default {
         if (isDiagonal.value) {
             payload.type = 'diagonal';
             payload.count = itemsToRemove.value;
-            payload.pile_index = 0; // Backend ignores this for diagonal? Checks are made? 
-                                    // Usually for diagonal Pile Index is irrelevant but backend might expect it.
-                                    // Let's check WythoffLogic. 
-                                    // Assuming backend handles it. Sending 0 is safe.
+            payload.pile_index = 0; 
+            
+            lastHumanMove.value = {
+                type: 'diagonal',
+                pileIndex: 0,
+                count: itemsToRemove.value
+            };
         } else {
             payload.type = 'standard';
             payload.count = itemsToRemove.value;
             payload.pile_index = selectedPile.value;
+            
+            lastHumanMove.value = {
+                type: 'standard',
+                pileIndex: selectedPile.value,
+                count: itemsToRemove.value
+            };
         }
 
         const res = await fetch(`${API_BASE}/wythoff/${gameId}/move`, {
@@ -349,22 +381,108 @@ export default {
         socket.onmessage = ({ data }) => {
             try {
                 const msg = JSON.parse(data);
-                // Wythoff move events: type, move_type, count, pile_index, by, board, status
                 if (msg.board) {
                     game.value.board = JSON.parse(msg.board);
                 }
                 if (msg.status) {
                     game.value.status = msg.status;
                 }
-                
-                // Similar to Nim, trigger fetch to ensure all state (names, etc) is sync or just rely on basics.
-                // Fetching is safer for turns.
                 fetchGame();
-                
             } catch (e) {
                 console.error("WS Error", e);
             }
         };
+
+        // Watch game to detect AI moves and set ghosts
+        watch(game, (newVal, oldVal) => {
+             if (!newVal) return;
+             
+             // First load initialization
+             if (!previousBoard.value) {
+                 previousBoard.value = [...newVal.board];
+                 previousTurn.value = newVal.current_turn;
+                 return;
+             }
+             
+             // Check if board changed
+             // Check if board changed
+             const boardChanged = JSON.stringify(newVal.board) !== JSON.stringify(previousBoard.value);
+             
+             if (boardChanged) {
+                 // Calculate Diffs
+                 const diffs = {};
+                 newVal.board.forEach((count, i) => {
+                     const prev = previousBoard.value[i] || 0;
+                     if (prev > count) {
+                         diffs[i] = prev - count;
+                     }
+                 });
+
+                 // Subtract pending human move
+                 if (lastHumanMove.value) {
+                     const { pileIndex, count, type } = lastHumanMove.value;
+                     if (type === 'diagonal') {
+                         if (diffs[0]) {
+                             diffs[0] -= count;
+                             if (diffs[0] <= 0) delete diffs[0];
+                         }
+                         if (diffs[1]) {
+                             diffs[1] -= count;
+                             if (diffs[1] <= 0) delete diffs[1];
+                         }
+                     } else {
+                         // Standard
+                         if (diffs[pileIndex]) {
+                             diffs[pileIndex] -= count;
+                             if (diffs[pileIndex] <= 0) delete diffs[pileIndex];
+                         }
+                     }
+                     lastHumanMove.value = null; 
+                 }
+                 
+                 const hasResidualDiff = Object.keys(diffs).length > 0;
+                 
+                 if (hasResidualDiff) {
+                     // Check if residual is from AI
+                     let possibleAI = false;
+                     
+                     if (currentUser.value) {
+                         const isP1AI = newVal.config.player1Type === 'ai';
+                         const isP2AI = newVal.config.player2Type === 'ai';
+                         
+                         if (isPlayer1.value) {
+                             if (isP2AI) possibleAI = true;
+                         } else if (isPlayer2.value) {
+                             if (isP1AI) possibleAI = true;
+                         } else {
+                             const moverSymbol = previousTurn.value;
+                             if (moverSymbol === '1' && isP1AI) possibleAI = true;
+                             if (moverSymbol === '2' && isP2AI) possibleAI = true;
+                         }
+                     } else {
+                         // Spectator fallback
+                         const isP1AI = newVal.config.player1Type === 'ai';
+                         const isP2AI = newVal.config.player2Type === 'ai';
+                          const moverSymbol = previousTurn.value;
+                         if (moverSymbol === '1' && isP1AI) possibleAI = true;
+                         if (moverSymbol === '2' && isP2AI) possibleAI = true;
+                     }
+                     
+                     if (possibleAI) {
+                         ghostItems.value = diffs;
+                     } else {
+                         ghostItems.value = {};
+                     }
+                 } else {
+                     ghostItems.value = {};
+                 }
+                 
+                 previousBoard.value = [...newVal.board];
+                 previousTurn.value = newVal.current_turn;
+             } else {
+                 previousTurn.value = newVal.current_turn;
+             }
+        }, { deep: true });
     });
     
     onUnmounted(() => {
@@ -372,14 +490,18 @@ export default {
         if (socket) socket.close();
     });
 
+    const goBack = () => {
+        router.push('/games');
+    };
+
     return {
       game, loading, error,
       currentUser,
-      selectedPile, itemsToRemove, isDiagonal,
+      selectedPile, itemsToRemove, isDiagonal, ghostItems,
       isMyTurn, currentTurnName, statusMessage,
       canGoDiagonal, maxRemovable, hasSelection, 
       isPileSelected, canSelectPile,
-      selectPile, toggleItemRemoval, cancelSelection, submitMove
+      selectPile, toggleItemRemoval, cancelSelection, submitMove, goBack
     };
   }
 };
@@ -470,6 +592,14 @@ export default {
   transform: scale(0.9);
 }
 
+.item.ghost {
+  opacity: 0.3;
+  /* Keep same color as normal item but transparent */
+  background: #e67e22; 
+  pointer-events: none; /* Non-interactive */
+  border: 1px dashed #fff; /* Optional visual distinction */
+}
+
 .pile-count {
   font-weight: bold;
   font-size: 1.2em;
@@ -521,6 +651,24 @@ export default {
 .btn-confirm:disabled {
   background: #555;
   cursor: not-allowed;
+}
+
+.btn-exit {
+    padding: 10px 20px;
+    font-size: 1rem;
+    cursor: pointer;
+    border: none;
+    border-radius: 5px;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: background-color 0.2s;
+    font-weight: bold;
+    background-color: #d9534f;
+    color: white;
+}
+.btn-exit:hover {
+    background-color: #c9302c;
 }
 
 .game-over {

@@ -45,35 +45,49 @@
               @click.stop="toggleItemRemoval(index, n)"
             >
             </div>
+            <!-- Ghost items -->
+            <div
+                v-if="ghostItems[index]"
+                v-for="g in ghostItems[index]"
+                :key="'ghost-' + g"
+                class="item ghost"
+            ></div>
           </div>
           <div class="pile-count">{{ count }}</div>
         </div>
       </div>
 
-      <div class="controls" v-if="isMyTurn && game.status === 'in_progress'">
-        <div v-if="selectedPile !== null" class="action-panel">
-          <p>Retirar <strong>{{ itemsToRemove }}</strong> objeto(s) de la Fila {{ selectedPile + 1 }}</p>
-          <input 
-            type="range" 
-            min="1" 
-            :max="game.board[selectedPile]" 
-            v-model.number="itemsToRemove"
-            class="range-slider"
-          />
-          <div class="buttons">
-             <button @click="cancelSelection" class="btn-cancel">Cancelar</button>
-             <button @click="submitMove" class="btn-confirm" :disabled="itemsToRemove < 1">Confirmar Movimiento</button>
-          </div>
+      <div class="controls">
+        <div v-if="isMyTurn && game.status === 'in_progress'">
+             <div v-if="selectedPile !== null" class="action-panel">
+               <p>Retirar <strong>{{ itemsToRemove }}</strong> objeto(s) de la Fila {{ selectedPile + 1 }}</p>
+               <input 
+                 type="range" 
+                 min="1" 
+                 :max="game.board[selectedPile]" 
+                 v-model.number="itemsToRemove"
+                 class="range-slider"
+               />
+               <div class="buttons">
+                  <button @click="cancelSelection" class="btn-cancel">Cancelar</button>
+                  <button @click="submitMove" class="btn-confirm" :disabled="itemsToRemove < 1">Confirmar Movimiento</button>
+               </div>
+             </div>
+             <div v-else class="instruction">
+               Selecciona una fila para eliminar objetos.
+             </div>
         </div>
-        <div v-else class="instruction">
-          Selecciona una fila para eliminar objetos.
+        <div v-else-if="game.status === 'in_progress'" class="instruction">
+             Espera tu turno...
         </div>
+        
+        <button class="btn-exit" @click="goBack">Salir</button>
       </div>
       
       <div v-if="game.status !== 'in_progress'" class="game-over">
         <h3>Fin de la partida</h3>
         <p>{{ statusMessage }}</p>
-        <button @click="$router.push('/nimActive')" class="btn-home">Volver</button>
+        <button @click="goBack" class="btn-home">Volver</button>
       </div>
 
     </div>
@@ -99,7 +113,14 @@ export default {
     
     // Game State
     const selectedPile = ref(null);
+
     const itemsToRemove = ref(1);
+    
+    // Ghost Items
+    const previousBoard = ref(null);
+    const previousTurn = ref(null);
+    const ghostItems = ref({}); // { pileIndex: count }
+    const lastHumanMove = ref(null); // { pileIndex, count } to filter out own moves
     
     // WebSocket
     let socket = null;
@@ -183,32 +204,136 @@ export default {
                 // If it's a move/update, we could either re-fetch or trust the payload
                 // The backend sends full board and status in payload for moves
                 if (msg.board) {
-                    game.value.board = JSON.parse(msg.board);
+                    // We need to fetchGame to get full sync including turns and ensuring logic runs?
+                    // But we can also set it here to be faster. 
+                    // However, our fetchGame() logic is robust.
+                    // Let's rely on fetchGame() for consistency for now, 
+                    // but we might want to capture "who moved" from msg if needed.
                 }
-                if (msg.status) {
-                    game.value.status = msg.status;
-                }
-                if (msg.current_turn) {
-                    game.value.current_turn = msg.current_turn; 
-                    // Note: backend msg usually relies on "by" field or status to imply turn, 
-                    // or we should ensure backend sends current_turn.
-                    // Nim backend 'move' event sends: pile_index, count, by, board, status.
-                    // It does NOT send current_turn explicitly in the redis message in nim.py?
-                    // Let's check nim.py: 
-                    // "by": game.current_turn if status_val != "in_progress" else ...
-                    // It doesn't send 'current_turn'.
-                    // So we might need to re-fetch OR deduce. 
-                    // To be safe and simple: fetchGame() on any move event.
-                    fetchGame();
-                } else {
-                    // Fallback if we just want to trigger refresh
-                    fetchGame();
-                }
+                
+                // Trigger fetch to standardize update flow
+                fetchGame();
                 
             } catch (e) {
                 console.error("WS Error", e);
             }
         };
+
+        // Watch game to detect AI moves and set ghosts
+        watch(game, (newVal, oldVal) => {
+             if (!newVal) return;
+             
+             // First load initialization
+             if (!previousBoard.value) {
+                 previousBoard.value = [...newVal.board];
+                 previousTurn.value = newVal.current_turn;
+                 return;
+             }
+             
+             // Check if board changed
+             const boardChanged = JSON.stringify(newVal.board) !== JSON.stringify(previousBoard.value);
+             
+             if (boardChanged) {
+                 // Calculate Diffs
+                 const diffs = {};
+                 newVal.board.forEach((count, i) => {
+                     const prev = previousBoard.value[i] || 0;
+                     if (prev > count) {
+                         diffs[i] = prev - count;
+                     }
+                 });
+
+                 // If we have a pending human move, subtract it
+                 if (lastHumanMove.value) {
+                     const { pileIndex, count } = lastHumanMove.value;
+                     if (diffs[pileIndex]) {
+                         diffs[pileIndex] -= count;
+                         if (diffs[pileIndex] <= 0) delete diffs[pileIndex];
+                     }
+                     lastHumanMove.value = null; // Consumed
+                 }
+
+                 // Check if remaining diffs belong to AI
+                 // If there are remaining diffs, it implies an "Other" player moved.
+                 // In 2P game, if I moved (handled above), any extra is Opponent.
+                 // If I didn't move, the diff is the Mover (previousTurn).
+                 
+                 // How to decide if remaining diff involves AI?
+                 // Simple check: Is the "Opponent" (for my move) or "Mover" (for async) an AI?
+                 
+                 const hasResidualDiff = Object.keys(diffs).length > 0;
+                 
+                 if (hasResidualDiff) {
+                     // Who is responsible for this diff?
+                     // Case A: I just moved (lastHumanMove was set). Residual is Opponent.
+                     // Case B: I didn't move. Residual is Mover (previousTurn).
+                     
+                     // We can't strictly distinguish Case A vs B here easily without more flags, 
+                     // BUT 'lastHumanMove' was just consumed above if it existed.
+                     // So if we had lastHumanMove, we subtract it. The rest is implicitly Opponent.
+                     // Who is Opponent?
+                     // If I am P1, Opponent is P2.
+                     
+                     let possibleAI = false;
+                     
+                     // Helper to check if a player position is AI
+                     const isP1AI = newVal.config.player1Type === 'ai';
+                     const isP2AI = newVal.config.player2Type === 'ai';
+                     
+                     // Who moved "extra"?
+                     // If I am P1, extra is P2.
+                     // If I am P2, extra is P1.
+                     // If I am Spectator, I never have lastHumanMove, so it's purely `previousTurn`.
+                     
+                     if (currentUser.value) {
+                         if (isPlayer1.value) {
+                             if (isP2AI) possibleAI = true;
+                         } else if (isPlayer2.value) {
+                             if (isP1AI) possibleAI = true;
+                         } else {
+                             // Spectator or neither
+                             const moverSymbol = previousTurn.value;
+                             if (moverSymbol === '1' && isP1AI) possibleAI = true;
+                             if (moverSymbol === '2' && isP2AI) possibleAI = true;
+                         }
+                     }
+                     
+                     // Special Case: Async Update (Not my move).
+                     // If lastHumanMove was null, then `diffs` is the full move.
+                     // Mover is `previousTurn`.
+                     if (Object.keys(diffs).length > 0 && !possibleAI) {
+                         // Double check pure async case
+                         // If I didn't move, and `previousTurn` was P2 (AI), possibleAI should be true?
+                         // Re-eval logic:
+                         // Ideally we just check: Is the entity that caused `diffs` an AI?
+                         
+                         const moverSymbol = previousTurn.value;
+                         let moverIsAI = false;
+                         if (moverSymbol === '1' && isP1AI) moverIsAI = true;
+                         if (moverSymbol === '2' && isP2AI) moverIsAI = true;
+                         
+                         // If I didn't move locally, then the Mover is the one responsible.
+                         if (moverIsAI) possibleAI = true;
+                     }
+
+                     if (possibleAI) {
+                        ghostItems.value = diffs;
+                     } else {
+                        ghostItems.value = {};
+                     }
+                     
+                 } else {
+                     ghostItems.value = {};
+                 }
+                 
+                 // Update previous
+                 previousBoard.value = [...newVal.board];
+                 previousTurn.value = newVal.current_turn;
+             } else {
+                 previousTurn.value = newVal.current_turn;
+             }
+        }, { deep: true });
+
     });
 
     onUnmounted(() => {
@@ -246,6 +371,8 @@ export default {
         const count = game.value.board[pileIndex];
         const newToRemove = count - n + 1;
         
+
+        
         itemsToRemove.value = newToRemove;
     };
 
@@ -256,6 +383,12 @@ export default {
 
     const submitMove = async () => {
       if (selectedPile.value === null) return;
+      
+      // Store pending move for ghost calculation
+      lastHumanMove.value = {
+          pileIndex: selectedPile.value,
+          count: itemsToRemove.value
+      };
       
       try {
         const token = localStorage.getItem('token');
@@ -287,12 +420,16 @@ export default {
       }
     };
 
+    const goBack = () => {
+        router.push('/games');
+    };
+
     return {
       game, loading, error,
       currentUser,
-      selectedPile, itemsToRemove,
+      selectedPile, itemsToRemove, ghostItems,
       isMyTurn, currentTurnName, statusMessage,
-      selectPile, toggleItemRemoval, cancelSelection, submitMove
+      selectPile, toggleItemRemoval, cancelSelection, submitMove, goBack
     };
   }
 };
@@ -382,6 +519,14 @@ export default {
   transform: scale(0.9);
 }
 
+.item.ghost {
+  opacity: 0.3;
+  /* Keep same color as normal item but transparent */
+  background: #e67e22; 
+  pointer-events: none; /* Non-interactive */
+  border: 1px dashed #fff; /* Optional visual distinction */
+}
+
 .pile-count {
   font-weight: bold;
   font-size: 1.2em;
@@ -396,6 +541,11 @@ export default {
   padding: 20px;
   border-radius: 8px;
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center; 
+  justify-content: center; 
+  gap: 1.5rem; 
 }
 .instruction {
   color: #aaa;
@@ -433,6 +583,24 @@ export default {
 .btn-confirm:disabled {
   background: #555;
   cursor: not-allowed;
+}
+
+.btn-exit {
+    padding: 10px 20px;
+    font-size: 1rem;
+    cursor: pointer;
+    border: none;
+    border-radius: 5px;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: background-color 0.2s;
+    font-weight: bold;
+    background-color: #d9534f;
+    color: white;
+}
+.btn-exit:hover {
+    background-color: #c9302c;
 }
 
 .game-over {

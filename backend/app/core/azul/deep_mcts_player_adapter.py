@@ -58,7 +58,12 @@ class AIAzulDeepMCTS(AIBase):
 # Register with a default model path (can be updated)
 # Note: Ensure 'modelos/checkpoint_best.pth' exists or update this path
 import os
-model_path = os.path.join(os.path.dirname(__file__), "zero/models/best.pt")
+model_path = os.getenv("AZUL_MODEL_PATH")
+if not model_path:
+    model_path = os.path.join(os.path.dirname(__file__), "zero/models/best.pt")
+else:
+    print(f"Using external model path from env: {model_path}")
+
 # Check if model exists before registering to avoid crash if missing
 if os.path.exists(model_path):
     register_ai("azul_deep_mcts", AIAzulDeepMCTS(model_path))

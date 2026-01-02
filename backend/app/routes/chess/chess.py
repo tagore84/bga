@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from datetime import datetime
 import chess
+import random
 
 from app.db.deps import get_db
 from app.models.chess.chess import ChessGame
@@ -46,6 +47,7 @@ class ChessCreateGameRequest(BaseModel):
     white_player_id: Optional[int]
     black_player_id: Optional[int]
     opponent_type: Literal["human", "ai"] = "human" # Simplified config
+    variant: Literal["standard", "chess960"] = "standard"
 
 class ChessGameState(BaseModel):
     id: int
@@ -132,9 +134,21 @@ async def create_game(
         else:
             game_config["opponent_type"] = "human"
 
+    if req.variant == "chess960":
+        # Generate random position 0-959
+        scharnagl = random.randint(0, 959)
+        board = chess.Board.from_chess960_pos(scharnagl)
+        board.chess960 = True
+        initial_fen = board.fen()
+        # Maybe store the start pos?
+        game_config["start_fen"] = initial_fen
+        game_config["chess960"] = True
+    else:
+        initial_fen = chess.Board().fen()
+
     game_name = req.game_name or f"Chess {datetime.utcnow().strftime('%Y-%m-%d %H:%M')}"
     new_game = ChessGame(
-        board_fen=chess.Board().fen(),
+        board_fen=initial_fen,
         current_turn="white", # python-chess uses boolean, we map to string
         status="in_progress",
         config=game_config,
@@ -247,6 +261,10 @@ async def process_ai_turns(game_id: int):
                         new_status = "draw"
                     else:
                         new_status = "draw"
+                elif board.can_claim_threefold_repetition():
+                    new_status = "draw"
+                elif board.can_claim_fifty_moves():
+                    new_status = "draw"
                 
                 if not isinstance(game.config, dict):
                     game.config = {}
@@ -483,6 +501,10 @@ async def make_move(
             new_status = "draw"
         else:
             new_status = "draw" # 50-move rule, repetition, etc.
+    elif board.can_claim_threefold_repetition():
+        new_status = "draw"
+    elif board.can_claim_fifty_moves():
+        new_status = "draw"
 
     # 5. Update DB
     if not isinstance(game.config, dict):

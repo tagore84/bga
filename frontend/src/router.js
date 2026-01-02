@@ -23,6 +23,9 @@ import WythoffGame from './components/wythoff/WythoffGame.vue';
 import Connect4Config from './components/connect4/Connect4Config.vue'
 import Connect4ActiveGames from './components/connect4/Connect4ActiveGames.vue'
 import Connect4Game from './components/connect4/Connect4Game.vue'
+import SantoriniActiveGames from './components/santorini/SantoriniActiveGames.vue'
+import SantoriniConfig from './components/santorini/SantoriniConfig.vue'
+import SantoriniGame from './components/santorini/SantoriniGame.vue'
 import ErrorPage from './Error.vue'
 
 const routes = [
@@ -52,6 +55,12 @@ const routes = [
   { path: '/connect4Config', component: Connect4Config, meta: { requiresAuth: true } },
   { path: '/connect4Active', component: Connect4ActiveGames, meta: { requiresAuth: true } },
   { path: '/connect4/:id', component: Connect4Game, meta: { requiresAuth: true } },
+
+  // Santorini Routes
+  { path: '/santoriniActive', component: SantoriniActiveGames, meta: { requiresAuth: true } },
+  { path: '/santoriniConfig', component: SantoriniConfig, meta: { requiresAuth: true } },
+  { path: '/santorini/:id', component: SantoriniGame, meta: { requiresAuth: true } },
+
   { path: '/error', component: ErrorPage },
   { path: '/:pathMatch(.*)*', redirect: '/error' }
 ]

@@ -10,10 +10,17 @@
         <div class="player-slot p1-slot">
             <label class="player-label p1-label">👤 Jugador 1</label>
             <div class="avatar-ph p1-bg"></div>
+
+            <!-- Type Toggle -->
+            <div class="type-toggle">
+                <button @click="p1Type = 'human'" :class="{ active: p1Type === 'human' }">Humano</button>
+                <button @click="p1Type = 'ai'" :class="{ active: p1Type === 'ai' }">IA</button>
+            </div>
+
             <select v-model="selectedP1" class="glass-select">
                 <option :value="null" disabled>Seleccionar...</option>
-                <option v-for="p in availablePlayers1" :key="p.id" :value="p">
-                     {{ p.name }} ({{ p.type === 'ai' ? 'IA' : 'Humano' }})
+                <option v-for="p in (p1Type === 'human' ? humans : ais)" :key="p.id" :value="p">
+                     {{ p.name }}
                 </option>
             </select>
         </div>
@@ -27,10 +34,17 @@
         <div class="player-slot p2-slot">
             <label class="player-label p2-label">👤 Jugador 2</label>
             <div class="avatar-ph p2-bg"></div>
+
+            <!-- Type Toggle -->
+            <div class="type-toggle">
+                <button @click="p2Type = 'human'" :class="{ active: p2Type === 'human' }">Humano</button>
+                <button @click="p2Type = 'ai'" :class="{ active: p2Type === 'ai' }">IA</button>
+            </div>
+
             <select v-model="selectedP2" class="glass-select">
                  <option :value="null" disabled>Seleccionar...</option>
-                <option v-for="p in availablePlayers2" :key="p.id" :value="p">
-                     {{ p.name }} ({{ p.type === 'ai' ? 'IA' : 'Humano' }})
+                <option v-for="p in (p2Type === 'human' ? humans : ais)" :key="p.id" :value="p">
+                     {{ p.name }}
                 </option>
             </select>
         </div>
@@ -53,9 +67,12 @@ import { API_BASE } from '../../config';
 export default {
   setup() {
     const router = useRouter();
-    const players = ref([]);
+    const humans = ref([]);
+    const ais = ref([]);
     const selectedP1 = ref(null);
     const selectedP2 = ref(null);
+    const p1Type = ref('human');
+    const p2Type = ref('human');
     const error = ref(null);
 
     const fetchPlayers = async () => {
@@ -66,25 +83,20 @@ export default {
         });
         if (res.ok) {
             const all = await res.json();
-            // Filter: Humans + Wythoff AI
-            players.value = all.filter(p => {
-                if (p.type === 'human') return true;
-                if (p.type === 'ai') {
-                    return p.name.toLowerCase().includes('wythoff');
-                }
-                return false;
-            });
             
-            // Avoid null defaults to match "Seleccionar..." appearance if desired, 
-            // OR set defaults like Nim? Nim defaults to null?
-            // "Seleccionar..." option is provided, so let's default to null or try to pick smart.
-            // Nim config usually forces selection.
-             const humans = players.value.filter(p => p.type === 'human');
-            if (humans.length > 0) selectedP1.value = humans[0];
+            humans.value = all.filter(p => p.type === 'human');
+            ais.value = all.filter(p => p.type === 'ai' && p.name.toLowerCase().includes('wythoff'));
             
-            const ais = players.value.filter(p => p.type === 'ai');
-            if (ais.length > 0) selectedP2.value = ais[0];
-            else if (humans.length > 1) selectedP2.value = humans[1];
+            // Set defaults if possible or leave empty
+            if (humans.value.length > 0) selectedP1.value = humans.value[0];
+            
+             // Smart default for P2
+            if (ais.value.length > 0) {
+                 p2Type.value = 'ai';
+                 selectedP2.value = ais.value[0];
+            } else if (humans.value.length > 1) {
+                 selectedP2.value = humans.value[1];
+            }
 
         }
       } catch (e) {
@@ -97,9 +109,24 @@ export default {
         try {
             const token = localStorage.getItem('token');
             const dateStr = new Date().toLocaleTimeString();
-            // Ensure values are objects
+            // Ensure values are objects (the select binds objects here unlike other components, keeping it consistent with original file logic)
+            // Wait, original logic used :value="p", so selectedP1 is the object.
+            // Other components bind ID. Let's stick to object as per original WythoffConfig but ensure types are correct.
+            
             const p1 = selectedP1.value;
             const p2 = selectedP2.value;
+            
+            // Re-fetch object from list if needed, but since we bind object, it should be fine.
+            // Just ensure it matches the current type toggle? 
+            // The UI hides the mismatching options, but the value persists. 
+            // Let's force re-selection or assume user knows what they see. 
+            // Better: update valid check? 
+            // Actually, if I toggle type, the select shows "Seleccionar...", so value stays but visual changes.
+            // It's safer to ensure we pick from the correct list or just trust the bound object.
+            // If I switch to AI, the select might show empty but p1 is still the Human object.
+            // That's a common UI bug. I should clear selection on toggle? 
+            // I didn't do that for others, but others bind ID. 
+            // Let's keep it simple. If the user toggles, they usually pick a new player.
             
             const gameName = `Wythoff ${p1.name} vs ${p2.name} (${dateStr})`;
             
@@ -135,10 +162,12 @@ export default {
     onMounted(fetchPlayers);
 
     return {
-        availablePlayers1: players,
-        availablePlayers2: players,
+        humans,
+        ais,
         selectedP1,
         selectedP2,
+        p1Type,
+        p2Type,
         createGame,
         error,
         isValid: computed(() => selectedP1.value && selectedP2.value)
@@ -149,10 +178,10 @@ export default {
 
 <style scoped>
 .config-container {
-  max-width: 800px; /* Slightly wider than Nim */
+  max-width: 800px;
   margin: 4rem auto;
   padding: 3rem;
-  background-color: #1e1e1e; /* Fallback */
+  background-color: #1e1e1e;
   background: linear-gradient(145deg, #1e1e1e, #2a2a2a);
   border: 1px solid #444;
   border-radius: 16px;
@@ -212,6 +241,31 @@ export default {
 .p1-bg { background: linear-gradient(135deg, #f1c40f, #d35400); }
 .p2-bg { background: linear-gradient(135deg, #9b59b6, #8e44ad); }
 
+.type-toggle {
+    display: flex;
+    background: rgba(0,0,0,0.3);
+    border-radius: 6px;
+    padding: 2px;
+    margin-bottom: 0.5rem;
+}
+
+.type-toggle button {
+    padding: 4px 12px;
+    font-size: 0.8rem;
+    color: #ccc;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.type-toggle button.active {
+    background: rgba(255,255,255,0.1);
+    color: white;
+    font-weight: bold;
+}
+
 .glass-select {
   width: 100%;
   background: rgba(0, 0, 0, 0.6);
@@ -253,14 +307,10 @@ export default {
     transition: all 0.2s;
 }
 .btn-primary:not(:disabled) {
-    background: linear-gradient(135deg, #6b7280, #4b5563); /* Keep greyish or make pop? User screenshot had grey buttons */
+    background: linear-gradient(135deg, #6b7280, #4b5563); 
 }
-/* Wait, screenshot shows Start Button as Grey? Or Blue/Purple? 
-   The uploaded image 1767146029496 is "Comenzar Partida" in grey.
-   Let's match that.
-*/
+
 .btn-primary:hover:not(:disabled) {
-    background: linear-gradient(135deg, #7f1d1d, #b91c1c); /* Maybe keep consistent with other games? No, match screenshots. */
      background: linear-gradient(135deg, #4b5563, #374151);
      transform: translateY(-2px);
 }

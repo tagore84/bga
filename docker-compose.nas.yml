@@ -13,6 +13,8 @@ services:
         condition: service_healthy
     environment:
       - DATABASE_URL=postgresql://bga:secret@db:5432/bga
+      - AZUL_MODEL_PATH=azul_zero_model/best.pt
+
     networks:
       - bga_net
 

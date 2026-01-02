@@ -7,6 +7,9 @@ services:
       - '8000:8000'
     volumes:
       - ./backend:/app
+    environment:
+      AZUL_MODEL_PATH: azul_zero_model/best.pt
+
     depends_on:
       redis:
         condition: service_started
@@ -29,6 +32,7 @@ services:
       POSTGRES_DB: bga
       POSTGRES_USER: bga
       POSTGRES_PASSWORD: secret
+
     ports:
       - '5432:5432'
     volumes:

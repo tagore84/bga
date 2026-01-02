@@ -10,9 +10,16 @@
         <div class="player-slot p1-slot">
             <label class="player-label p1-label">👤 Jugador 1</label>
             <div class="avatar-ph p1-bg"></div>
+
+             <!-- Type Toggle -->
+            <div class="type-toggle">
+                <button @click="p1Type = 'human'" :class="{ active: p1Type === 'human' }">Humano</button>
+                <button @click="p1Type = 'ai'" :class="{ active: p1Type === 'ai' }">IA</button>
+            </div>
+
             <select v-model="player1" class="glass-select">
                 <option :value="null" disabled>Seleccionar...</option>
-                <option v-for="player in players" :key="player.id" :value="player.id">
+                <option v-for="player in (p1Type === 'human' ? humans : ais)" :key="player.id" :value="player.id">
                     {{ player.name }}
                 </option>
             </select>
@@ -27,9 +34,16 @@
         <div class="player-slot p2-slot">
             <label class="player-label p2-label">👤 Jugador 2</label>
             <div class="avatar-ph p2-bg"></div>
+            
+             <!-- Type Toggle -->
+            <div class="type-toggle">
+                <button @click="p2Type = 'human'" :class="{ active: p2Type === 'human' }">Humano</button>
+                <button @click="p2Type = 'ai'" :class="{ active: p2Type === 'ai' }">IA</button>
+            </div>
+
             <select v-model="player2" class="glass-select">
                  <option :value="null" disabled>Seleccionar...</option>
-                <option v-for="player in players" :key="player.id" :value="player.id">
+                <option v-for="player in (p2Type === 'human' ? humans : ais)" :key="player.id" :value="player.id">
                      {{ player.name }}
                 </option>
             </select>
@@ -51,10 +65,13 @@ import { useRouter } from 'vue-router'
 import { API_BASE } from '../../config'
 
 const router = useRouter()
-const players = ref([])
+const humans = ref([])
+const ais = ref([])
 const error = ref(null)
 const player1 = ref(null)
 const player2 = ref(null)
+const p1Type = ref('human')
+const p2Type = ref('human')
 const loading = ref(false)
 
 const isValid = computed(() => player1.value && player2.value)
@@ -77,14 +94,13 @@ onMounted(async () => {
         if (!resPlayers.ok) throw new Error('No se pudieron cargar los jugadores')
         const rawPlayers = await resPlayers.json()
         
-        // 3. Filter: Humans + Nim AIs or All AIs?
-        // Nim AI players should have game_id associated with nim.
+        // 3. Filter
+        humans.value = rawPlayers.filter(p => p.type === 'human')
+        
         if (nimGame) {
-             // Show all Humans AND AIs for Nim. 
-             // Maybe show ALL AIs? User said "jugadores de IA de Nim".
-             players.value = rawPlayers.filter(p => p.type === 'human' || p.game_id === nimGame.id || p.name.includes("Nim"))
+             ais.value = rawPlayers.filter(p => p.type === 'ai' && (p.game_id === nimGame.id || p.name.includes("Nim")))
         } else {
-             players.value = rawPlayers
+             ais.value = []
         }
         
     } catch (e) {
@@ -107,8 +123,8 @@ async function createGame() {
         return
     }
 
-    const selP1 = players.value.find(p => p.id === parseInt(p1Id))
-    const selP2 = players.value.find(p => p.id === parseInt(p2Id))
+    const selP1 = (p1Type.value === 'human' ? humans : ais).value.find(p => p.id === parseInt(p1Id))
+    const selP2 = (p2Type.value === 'human' ? humans : ais).value.find(p => p.id === parseInt(p2Id))
 
     // Auto-generate name
     const dateStr = new Date().toLocaleTimeString();
@@ -216,6 +232,31 @@ async function createGame() {
 }
 .p1-bg { background: linear-gradient(135deg, #f1c40f, #d35400); }
 .p2-bg { background: linear-gradient(135deg, #9b59b6, #8e44ad); }
+
+.type-toggle {
+    display: flex;
+    background: rgba(0,0,0,0.3);
+    border-radius: 6px;
+    padding: 2px;
+    margin-bottom: 0.5rem;
+}
+
+.type-toggle button {
+    padding: 4px 12px;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.type-toggle button.active {
+    background: rgba(255,255,255,0.1);
+    color: white;
+    font-weight: bold;
+}
 
 .glass-select {
   width: 100%;

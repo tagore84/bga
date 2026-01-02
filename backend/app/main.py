@@ -24,6 +24,7 @@ from app.routes.chess.chess import router as chess_router
 from app.routes.connect4.connect4 import router as connect4_router
 from app.routes.nim.nim import router as nim_router
 from app.routes.wythoff.wythoff import router as wythoff_router
+from app.routes.santorini.santorini import router as santorini_router
 
 app = FastAPI()
 
@@ -45,6 +46,7 @@ app.include_router(chess_router, prefix="/chess", tags=["chess"])
 app.include_router(connect4_router)
 app.include_router(nim_router)
 app.include_router(wythoff_router)
+app.include_router(santorini_router)
 
 
 @app.on_event("startup")
@@ -238,6 +240,7 @@ async def websocket_nim(websocket: WebSocket, game_id: int):
         return
 
 
+
 # WebSocket for Wythoff
 @app.websocket("/ws/wythoff/{game_id}")
 async def websocket_wythoff(websocket: WebSocket, game_id: int):
@@ -265,6 +268,31 @@ async def websocket_wythoff(websocket: WebSocket, game_id: int):
         return
 
 
+# WebSocket for Santorini
+@app.websocket("/ws/santorini/{game_id}")
+async def websocket_santorini(websocket: WebSocket, game_id: int):
+    """
+    Cada vez que haya un nuevo movimiento en Redis Stream 'santorini:{game_id}',
+    lo reenviamos a los clientes conectados.
+    """
+    await websocket.accept()
+    import app.core.redis as core_redis
+    last_id = "$"
+    try:
+        while True:
+            entries = await core_redis.redis_pool.xread(
+                streams={f"santorini:{game_id}": last_id},
+                block=30000,
+                count=10
+            )
+            if not entries:
+                continue
+            for _, msgs in entries:
+                for msg_id, payload in msgs:
+                    last_id = msg_id
+                    await websocket.send_text(json.dumps(payload))
+    except WebSocketDisconnect:
+        return
 
 if __name__ == "__main__":
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)

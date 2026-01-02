@@ -10,9 +10,16 @@
         <div class="player-slot white-slot">
             <label class="player-label white-label">♕ Jugador Blancas</label>
             <div class="avatar-ph white-bg"></div>
+            
+             <!-- Type Toggle -->
+            <div class="type-toggle">
+                <button @click="whiteType = 'human'" :class="{ active: whiteType === 'human' }">Humano</button>
+                <button @click="whiteType = 'ai'" :class="{ active: whiteType === 'ai' }">IA</button>
+            </div>
+
             <select v-model="whitePlayerId" class="glass-select">
                 <option :value="null" disabled>Seleccionar...</option>
-                <option v-for="player in players" :key="player.id" :value="player.id">
+                <option v-for="player in (whiteType === 'human' ? humans : ais)" :key="player.id" :value="player.id">
                     {{ player.name }}
                 </option>
             </select>
@@ -27,9 +34,16 @@
         <div class="player-slot black-slot">
             <label class="player-label black-label">♛ Jugador Negras</label>
             <div class="avatar-ph black-bg"></div>
+            
+             <!-- Type Toggle -->
+            <div class="type-toggle">
+                <button @click="blackType = 'human'" :class="{ active: blackType === 'human' }">Humano</button>
+                <button @click="blackType = 'ai'" :class="{ active: blackType === 'ai' }">IA</button>
+            </div>
+
             <select v-model="blackPlayerId" class="glass-select">
                  <option :value="null" disabled>Seleccionar...</option>
-                <option v-for="player in players" :key="player.id" :value="player.id">
+                <option v-for="player in (blackType === 'human' ? humans : ais)" :key="player.id" :value="player.id">
                      {{ player.name }}
                 </option>
             </select>
@@ -37,6 +51,12 @@
     </div>
 
     <div class="actions mt-3">
+        <div class="options mb-2">
+             <label style="color: white; font-size: 1.1rem; cursor: pointer; display: flex; align-items: center; gap: 0.5rem;">
+                <input type="checkbox" v-model="isChess960" style="width: 20px; height: 20px;">
+                Experimentar Ajedrez 960
+             </label>
+        </div>
         <button @click="goBack" class="btn-secondary">Volver</button>
         <button @click="createGame" :disabled="!isValid" class="btn-primary">
             Comenzar Partida
@@ -53,9 +73,13 @@ export default {
   name: 'ChessConfig',
   data() {
     return {
-      players: [],
+      humans: [],
+      ais: [],
       whitePlayerId: null,
       blackPlayerId: null,
+      whiteType: 'human',
+      blackType: 'human',
+      isChess960: false,
       error: ''
     }
   },
@@ -67,15 +91,24 @@ export default {
   async created() {
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.get(`${API_BASE}/players/`, {
+      
+      // 1. Get Games to find Chess ID
+      const resGames = await axios.get(`${API_BASE}/games`);
+      const allGames = resGames.data.games ?? resGames.data;
+      const chessGame = allGames.find(g => g.name === 'chess');
+      
+      // 2. Get Players
+      const resPlayers = await axios.get(`${API_BASE}/players/`, {
          headers: { Authorization: `Bearer ${token}` }
       });
-      // Filter players for Chess (game_id=3/11 typically) or Human (null) 
-      // Assuming Chess game_id is 11 from previous file view context, or allow 3 if that was it.
-      // Actually previous code said game_id === 11. I'll stick to that.
-      this.players = res.data.filter(p => p.game_id === 3 || p.game_id === null); 
+      const allPlayers = resPlayers.data.filter(p => p.game_id === (chessGame ? chessGame.id : 3) || p.game_id === null);
+      
+      this.humans = allPlayers.filter(p => p.type === 'human');
+      this.ais = allPlayers.filter(p => p.type === 'ai');
+      
     } catch (e) {
       this.error = "Error cargando jugadores"
+      console.error(e)
     }
   },
   methods: {
@@ -86,10 +119,17 @@ export default {
       try {
         const token = localStorage.getItem('token');
         
+        // Determine opponent type based on selection
+        let opType = "human";
+        if (this.whiteType === 'ai' || this.blackType === 'ai') {
+            opType = "ai";
+        }
+        
         const payload = {
           white_player_id: this.whitePlayerId,
           black_player_id: this.blackPlayerId,
-          opponent_type: "human"
+          opponent_type: opType,
+          variant: this.isChess960 ? "chess960" : "standard"
         };
 
         const res = await axios.post(`${API_BASE}/chess/`, payload, {
@@ -167,6 +207,31 @@ export default {
 .white-bg { background: linear-gradient(135deg, #ffffff, #e0e0e0); }
 .black-bg { background: linear-gradient(135deg, #444, #1a1a1a); }
 
+.type-toggle {
+    display: flex;
+    background: rgba(0,0,0,0.3);
+    border-radius: 6px;
+    padding: 2px;
+    margin-bottom: 0.5rem;
+}
+
+.type-toggle button {
+    padding: 4px 12px;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.type-toggle button.active {
+    background: rgba(255,255,255,0.1);
+    color: white;
+    font-weight: bold;
+}
+
 .glass-select {
   width: 100%;
   background: rgba(0, 0, 0, 0.4);
@@ -204,6 +269,9 @@ export default {
 .actions {
   display: flex;
   justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
 }
 
 .btn-primary {

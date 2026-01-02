@@ -16,6 +16,8 @@ from app.models.chess.chess import ChessGame
 from app.models.azul.azul import AzulGame
 from app.models.connect4.connect4 import Connect4Game
 from app.models.nim.nim import NimGame
+from app.models.wythoff.wythoff import WythoffGame
+from app.models.santorini.santorini import SantoriniGame
 
 # Chess Strategies
 from app.core.chess.ai_chess_minimax import MinimaxChessAI
@@ -38,6 +40,7 @@ from app.core.azul.deep_mcts_player_adapter import AIAzulDeepMCTS
 # Nim Strategies
 from app.core.nim.ai_nim import NimAIExpert, NimAIIntermediate
 from app.core.wythoff.ai_wythoff import WythoffAI
+from app.core.santorini.ai_santorini_random import RandomSantoriniAI
 
 # Determine model path for Azul DeepMCTS
 AZUL_MODEL_PATH = os.path.join(os.path.dirname(__file__), "azul", "zero", "models", "best.pt")
@@ -86,6 +89,9 @@ AI_PLAYER_CONFIG = {
     ],
     "wythoff": [
         {"name": "Wythoff AI", "description": "IA Wythoff (Razón Áurea)", "strategy": WythoffAI()}
+    ],
+    "santorini": [
+        {"name": "Santorini Random (IA)", "description": "IA Aleatoria (Pruebas)", "strategy": RandomSantoriniAI()}
     ]
 }
 # Append experimental safely
@@ -119,7 +125,8 @@ async def seed_games(db: AsyncSession):
         ("chess", "Clásico Juego de Ajedrez"),
         ("connect4", "Juego de estrategia vertical para conectar cuatro fichas"),
         ("nim", "Nim Misere: Quien toma el último objeto pierde"),
-        ("wythoff", "Wythoff Nim: Variante con dos montones y movimientos diagonales")
+        ("wythoff", "Wythoff Nim: Variante con dos montones y movimientos diagonales"),
+        ("santorini", "Juego estratégico de construir torres y subir a sus cimas en una isla griega")
     ]
     for name, description in juegos:
         result = await db.execute(select(Game).where(Game.name == name))
@@ -155,6 +162,8 @@ async def sync_ai_players(db: AsyncSession):
             await db.execute(delete(ChessGame).where(or_(ChessGame.player_white.in_(ai_ids), ChessGame.player_black.in_(ai_ids))))
             await db.execute(delete(Connect4Game).where(or_(Connect4Game.player_red.in_(ai_ids), Connect4Game.player_blue.in_(ai_ids))))
             await db.execute(delete(NimGame).where(or_(NimGame.player_1_id.in_(ai_ids), NimGame.player_2_id.in_(ai_ids))))
+            await db.execute(delete(WythoffGame).where(or_(WythoffGame.player_1_id.in_(ai_ids), WythoffGame.player_2_id.in_(ai_ids))))
+            await db.execute(delete(SantoriniGame).where(or_(SantoriniGame.player_p1.in_(ai_ids), SantoriniGame.player_p2.in_(ai_ids))))
         
         # Clean Azul games (Unconditional as per previous logic)
         await db.execute(delete(AzulGame)) 
@@ -167,7 +176,7 @@ async def sync_ai_players(db: AsyncSession):
         # Using specific patterns observed in user report
         await db.execute(delete(Player).where(
             or_(
-                Player.name.in_(['test', 'Test', 'pytest', 'chk_u1']),
+                Player.name.in_(['tester', 'Test', 'pytest', 'chk_u1']),
                 Player.name.like('chk_%'),
                 Player.name.like('del_%')
             )
