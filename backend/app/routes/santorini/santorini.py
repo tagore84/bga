@@ -88,13 +88,14 @@ async def create_game(
     
     # Initial Worker Placement (Simplified: Fixed positions for MVP or Random?)
     # Rules say players place them. For this MVP, let's place them reasonably.
-    # P1: (1,1), (3,3)
-    # P2: (1,3), (3,1)
+    # Initial Worker Placement
+    # P1: (0,0), (4,4)
+    # P2: (0,4), (4,0)
     
-    board[1][1]['worker'] = 'p1'
-    board[3][3]['worker'] = 'p1'
-    board[1][3]['worker'] = 'p2'
-    board[3][1]['worker'] = 'p2'
+    board[0][0]['worker'] = 'p1'
+    board[4][4]['worker'] = 'p1'
+    board[0][4]['worker'] = 'p2'
+    board[4][0]['worker'] = 'p2'
 
     new_game = SantoriniGame(
         board=board,

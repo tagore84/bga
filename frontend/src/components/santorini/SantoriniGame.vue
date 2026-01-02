@@ -14,13 +14,19 @@
           class="grid-cell"
           :style="cell.style"
           :class="{
-            'cursor-pointer': isInteractive(cell.r, cell.c),
-            'highlight-move': canMoveTo(cell.r, cell.c),
-            'highlight-build': canBuildAt(cell.r, cell.c),
-            'selected-source': isSelectedSource(cell.r, cell.c)
+            'cursor-pointer': isInteractive(cell.r, cell.c)
           }"
           @click="handleCellClick(cell.r, cell.c)"
         >
+          <!-- Highlights / Markers (Background Layer) -->
+          <div class="cell-marker"
+               :class="{
+                 'highlight-move': canMoveTo(cell.r, cell.c),
+                 'highlight-build': canBuildAt(cell.r, cell.c),
+                 'selected-source': isSelectedSource(cell.r, cell.c)
+               }"
+          ></div>
+
           <!-- Cell Content Stack -->
            <div class="cell-content">
              <!-- Building Block Level 1 -->
@@ -33,17 +39,19 @@
              <img v-if="cell.data.level >= 4" src="../../assets/santorini/dome.png" class="asset dome" />
              
              <!-- Worker -->
-             <!-- Dynamic lift: 25px per level approx? -->
+             <!-- Dynamic lift: 30px per level to match visual scale better and avoid clipping -->
+             <!-- Transform logic includes translateX(-50%) to keep it centered horizontally 
+                  and translateY for the vertical lift based on level -->
              <img v-if="cell.data.worker === 'p1'" src="../../assets/santorini/worker_p1.png" class="asset worker" 
-                  :style="{ transform: `translateY(-${(cell.data.level || 0) * 25}px)` }" />
+                  :style="{ transform: `translate(-50%, -${(cell.data.level || 0) * 30}px)` }" />
              <img v-if="cell.data.worker === 'p2'" src="../../assets/santorini/worker_p2.png" class="asset worker" 
-                  :style="{ transform: `translateY(-${(cell.data.level || 0) * 25}px)` }" />
+                  :style="{ transform: `translate(-50%, -${(cell.data.level || 0) * 30}px)` }" />
              
              <!-- Ghost Worker (Movement Preview) -->
              <div v-if="step === 'build' && selectedMovePos.r === cell.r && selectedMovePos.c === cell.c" 
                   class="ghost-worker">
                   <img :src="getCurrentWorkerImage()" class="asset worker opacity-70" 
-                       :style="{ transform: `translateY(-${(cell.data.level || 0) * 25}px)` }" />
+                       :style="{ transform: `translate(-50%, -${(cell.data.level || 0) * 30}px)` }" />
              </div>
           </div>
         </div>
@@ -51,8 +59,6 @@
     </div>
     
     <!-- Game Info & Controls (Moved Below) -->
-    <!-- ... -->
-
     <div class="game-footer w-full max-w-3xl mt-4 px-4 flex flex-col gap-4">
         
         <!-- Header Info Row -->
@@ -111,11 +117,11 @@ const route = useRoute()
 const gameId = route.params.id
 
 const CELL_COORDS = {
-    '0,0': {x: 300, y: 160}, '0,1': {x: 525, y: 195}, '0,2': {x: 750, y: 230}, '0,3': {x: 975, y: 265}, '0,4': {x: 1200, y: 300},
-    '1,0': {x: 332, y: 295}, '1,1': {x: 558, y: 311}, '1,2': {x: 783, y: 328}, '1,3': {x: 1008, y: 344}, '1,4': {x: 1233, y: 360},
-    '2,0': {x: 365, y: 430}, '2,1': {x: 590, y: 428}, '2,2': {x: 815, y: 425}, '2,3': {x: 1040, y: 423}, '2,4': {x: 1265, y: 420},
-    '3,0': {x: 398, y: 565}, '3,1': {x: 623, y: 544}, '3,2': {x: 848, y: 523}, '3,3': {x: 1073, y: 501}, '3,4': {x: 1298, y: 480},
-    '4,0': {x: 430, y: 700}, '4,1': {x: 655, y: 660}, '4,2': {x: 880, y: 620}, '4,3': {x: 1105, y: 580}, '4,4': {x: 1330, y: 540},
+    '0,0': {x: 360, y: 410}, '0,1': {x: 465, y: 355}, '0,2': {x: 570, y: 300}, '0,3': {x: 670, y: 235}, '0,4': {x: 770, y: 180},
+    '1,0': {x: 465, y: 465}, '1,1': {x: 570, y: 410}, '1,2': {x: 670, y: 350}, '1,3': {x: 770, y: 290}, '1,4': {x: 870, y: 235},
+    '2,0': {x: 570, y: 520}, '2,1': {x: 670, y: 465}, '2,2': {x: 770, y: 410}, '2,3': {x: 870, y: 350}, '2,4': {x: 973, y: 290},
+    '3,0': {x: 670, y: 580}, '3,1': {x: 770, y: 520}, '3,2': {x: 870, y: 465}, '3,3': {x: 973, y: 410}, '3,4': {x: 1070, y: 350},
+    '4,0': {x: 770, y: 650}, '4,1': {x: 870, y: 580}, '4,2': {x: 973, y: 520}, '4,3': {x: 1070, y: 465}, '4,4': {x: 1180, y: 410},
 }
 const BOARD_WIDTH = 1536
 const BOARD_HEIGHT = 838
@@ -171,7 +177,9 @@ const flatBoard = computed(() => {
     const arr = []
     for (let r = 0; r < 5; r++) {
         for (let c = 0; c < 5; c++) {
-            const coord = CELL_COORDS[`${r},${c}`] || {x:0, y:0}
+            const coordKey = `${r},${c}`;
+            const coord = CELL_COORDS[coordKey] || {x:0, y:0}
+            
             const leftPct = (coord.x / BOARD_WIDTH) * 100
             const topPct = (coord.y / BOARD_HEIGHT) * 100
             const zIndex = r + c + 10 // Base Z-index
@@ -190,8 +198,6 @@ const flatBoard = computed(() => {
     }
     return arr
 })
-
-// ... (rest of logic)
 
 
 // --- Logic ---
@@ -404,8 +410,6 @@ onUnmounted(() => {
   box-shadow: 0 20px 50px rgba(0,0,0,0.5);
 }
 
-/* ... */
-
 .grid-container {
   position: absolute;
   top: 0;
@@ -418,24 +422,45 @@ onUnmounted(() => {
 .grid-cell {
   position: absolute;
   display: flex;
-  align-items: center;
+  align-items: center; /* Generally center this div */
   justify-content: center;
-  width: 0; /* Position refers to center point */
-  height: 0;
-  transform: translate(-50%, -50%); /* Centering magic */
-  pointer-events: auto; /* Re-enable clicks */
-  
-  /* Debugging dot */
-  /* background: red; width: 4px; height: 4px; border-radius: 50%; */
+  width: 100px; /* Hitbox width */
+  height: 60px; /* Hitbox height */
+  transform: translate(-50%, -50%); /* Center on the coordinate */
+  pointer-events: auto; /* Enable clicks */
+  cursor: pointer; /* Show pointer by default on cells */
+  z-index: 100; /* Ensure it's above the board image */
+}
+
+/* Remove pointer-events: none from markers/content if they need to be pass-through, 
+   but since grid-cell handles the click, we can keep them purely visual or leave as is.
+   We just need to make sure grid-cell is on top of board but maybe below floating UI? */
+
+
+.cell-marker {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%); /* Start centered */
+  width: 120px; /* Size of the marker ring, matching content width */
+  height: 70px; /* Perspective flattened */
+  pointer-events: none;
+  border-radius: 50%;
+  opacity: 0; 
+  transition: all 0.2s ease;
+  z-index: 0; /* Behind content */
 }
 
 .cell-content {
   position: absolute;
   bottom: 0;
   left: 50%;
+  /* This centers the content horizontally relative to the grid point */
   transform: translateX(-50%);
-  width: 120px; /* Reduced touch target width approx */
+  width: 120px; 
   height: 120px;
+  pointer-events: none; /* Let clicks pass to grid-cell ?? No, we need clicks on cell */
+  /* Wait, grid-cell handles clicks. Content is visual. */
   display: flex;
   justify-content: center;
   align-items: flex-end; /* Stack from bottom up */
@@ -446,41 +471,45 @@ onUnmounted(() => {
   width: 100%; /* Relative to cell-content width */
   pointer-events: none;
   transition: transform 0.3s ease;
-  bottom: 0; /* Base assets at bottom of content box */
+  bottom: 0; /* Base assets at bottom of content box (which is the grid center point) */
 }
 
 .asset.base-block { z-index: 1; }
-.asset.mid-block { z-index: 2; bottom: 25px; } /* Adjust per visual overlap */
+.asset.mid-block { z-index: 2; bottom: 25px; } 
 .asset.top-block { z-index: 3; bottom: 50px; }
 .asset.dome { z-index: 4; bottom: 75px; }
 
 .asset.worker {
-  bottom: 22px; /* Lift worker slightly higher than blocks to center on tile top */
+  /* Adjusted positioning */
+  bottom: 8px; /* Slight offset from dead center to look grounded */
   z-index: 10;
-  width: 70%; 
-  left: 15%; 
+  width: 100px; /* Fixed larger width */
+  left: 50%; 
+  /* transform is applied inline for vertical lift, but we need origin */
+  transform-origin: bottom center;
 }
 
-/* Animations / Highlights */
+/* Marker States */
 .highlight-move {
+  opacity: 1;
   background: rgba(0, 255, 0, 0.4);
   box-shadow: inset 0 0 20px rgba(0, 255, 0, 0.6);
-  border-radius: 50%;
-  transform: scale(0.8) scaleY(0.6);
+  /* Use translate because it's absolute positioned centered */
+  transform: translate(-50%, -50%) scale(1.0);
 }
 
 .highlight-build {
+  opacity: 1;
   background: rgba(160, 32, 240, 0.4);
   box-shadow: inset 0 0 20px rgba(160, 32, 240, 0.6);
-  border-radius: 50%;
-  transform: scale(0.8) scaleY(0.6);
+  transform: translate(-50%, -50%) scale(1.0);
 }
 
 .selected-source {
+  opacity: 1;
   background: rgba(255, 255, 0, 0.4);
   box-shadow: 0 0 15px rgba(255, 255, 0, 0.8);
-  border-radius: 50%;
-  transform: scale(0.9) scaleY(0.6);
+  transform: translate(-50%, -50%) scale(1.1);
 }
 
 .ghost-worker {
@@ -490,6 +519,6 @@ onUnmounted(() => {
   pointer-events: none;
   opacity: 0.6;
   filter: grayscale(100%);
-  z-index: 20; /* Ensure on top of blocks */
+  z-index: 20; 
 }
 </style>

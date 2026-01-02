@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Santorini Board Debug</title>
+    <style>
+        body {
+            background-color: #1a1a1a;
+            color: #fff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            font-family: monospace;
+        }
+        .container {
+            position: relative;
+            width: 1536px;
+            height: 838px;
+            /* Scale it down to fit screen if needed, or scroll */
+            transform-origin: top left;
+            transform: scale(0.8); 
+        }
+        .board-img {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        .marker {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background-color: red;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+        }
+        .label {
+            position: absolute;
+            transform: translate(-50%, -120%);
+            background-color: rgba(0,0,0,0.7);
+            padding: 2px 4px;
+            border-radius: 4px;
+            font-size: 14px;
+            white-space: nowrap;
+            color: #0f0;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <img src="src/assets/santorini/board.png" class="board-img" alt="Santorini Board">
+    
+    <!-- Coordinate Markers will be injected here via JS for cleaner code -->
+</div>
+
+<script>
+    const coords = [
+        // Row 0
+        {r:0, c:0, x:360, y:410}, {r:0, c:1, x:465, y:355}, {r:0, c:2, x:570, y:300}, {r:0, c:3, x:670, y:235}, {r:0, c:4, x:770, y:180},
+        // Row 1
+        {r:1, c:0, x:465, y:465}, {r:1, c:1, x:570, y:410}, {r:1, c:2, x:670, y:350}, {r:1, c:3, x:770, y:290}, {r:1, c:4, x:870, y:235},
+        // Row 2
+        {r:2, c:0, x:570, y:520}, {r:2, c:1, x:670, y:465}, {r:2, c:2, x:770, y:410}, {r:2, c:3, x:870, y:350}, {r:2, c:4, x:973, y:290},
+        // Row 3
+        {r:3, c:0, x:670, y:580}, {r:3, c:1, x:770, y:520}, {r:3, c:2, x:870, y:465}, {r:3, c:3, x:973, y:410}, {r:3, c:4, x:1070, y:350},
+        // Row 4
+        {r:4, c:0, x:770, y:650}, {r:4, c:1, x:870, y:580}, {r:4, c:2, x:973, y:520}, {r:4, c:3, x:1070, y:465}, {r:4, c:4, x:1180, y:410},
+    ];
+
+    const container = document.querySelector('.container');
+
+    coords.forEach(p => {
+        // Dot
+        const dot = document.createElement('div');
+        dot.className = 'marker';
+        dot.style.left = p.x + 'px';
+        dot.style.top = p.y + 'px';
+        container.appendChild(dot);
+
+        // Label
+        const label = document.createElement('div');
+        label.className = 'label';
+        label.textContent = `${p.r},${p.c}`;
+        label.style.left = p.x + 'px';
+        label.style.top = p.y + 'px';
+        container.appendChild(label);
+    });
+</script>
+
+</body>
+</html>
