@@ -1,7 +1,26 @@
 <template>
   <div class="santorini-game min-h-screen flex flex-col items-center bg-gray-900">
     
-    <!-- Game Area (Board) - Now at the Top -->
+    <!-- Header (Top) -->
+    <div class="header w-full max-w-3xl glass-panel p-4 mb-4 flex justify-between items-center">
+        <div>
+            <h2 class="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-yellow-400 to-orange-300">
+               Santorini
+            </h2>
+            <div class="text-sm text-gray-400">
+               ID: {{ $route.params.id }} | Turno: 
+               <span :class="currentTurn === 'p1' ? 'text-yellow-400 font-bold' : 'text-red-400 font-bold'">
+                 {{ currentTurnPlayerName }}
+               </span>
+            </div>
+        </div>
+        
+        <div class="status text-xl font-mono text-gray-200">
+            {{ statusMessage }}
+        </div>
+    </div>
+
+    <!-- Game Area (Board - Middle) -->
     <div class="game-area relative">
       <!-- Board Background -->
       <img src="../../assets/santorini/board.png" class="board-bg" alt="Board" />
@@ -22,7 +41,7 @@
           <div class="cell-marker"
                :class="{
                  'highlight-move': canMoveTo(cell.r, cell.c),
-                 'highlight-build': canBuildAt(cell.r, cell.c),
+                 'highlight-build': canBuildAt(cell.r, cell.c) || (step === 'place' && canPlaceAt(cell.r, cell.c)),
                  'selected-source': isSelectedSource(cell.r, cell.c)
                }"
           ></div>
@@ -30,28 +49,29 @@
           <!-- Cell Content Stack -->
            <div class="cell-content">
              <!-- Building Block Level 1 -->
-             <img v-if="cell.data.level >= 1" src="../../assets/santorini/block_1.png" class="asset base-block" />
+             <!-- Building Block Level 1 -->
+             <img v-if="cell.data.level === 1" src="../../assets/santorini/block_1.png" class="asset base-block" />
              <!-- Building Block Level 2 -->
-             <img v-if="cell.data.level >= 2" src="../../assets/santorini/block_2.png" class="asset mid-block" />
+             <img v-if="cell.data.level === 2" src="../../assets/santorini/block_2.png" class="asset mid-block" />
              <!-- Building Block Level 3 -->
-             <img v-if="cell.data.level >= 3" src="../../assets/santorini/block_3.png" class="asset top-block" />
+             <img v-if="cell.data.level === 3" src="../../assets/santorini/block_3.png" class="asset top-block" />
              <!-- Dome -->
-             <img v-if="cell.data.level >= 4" src="../../assets/santorini/dome.png" class="asset dome" />
+             <img v-if="cell.data.level === 4" src="../../assets/santorini/dome.png" class="asset dome" />
              
              <!-- Worker -->
              <!-- Dynamic lift: 30px per level to match visual scale better and avoid clipping -->
              <!-- Transform logic includes translateX(-50%) to keep it centered horizontally 
-                  and translateY for the vertical lift based on level -->
+                  and translateY for the vertical             <!-- Worker -->
              <img v-if="cell.data.worker === 'p1'" src="../../assets/santorini/worker_p1.png" class="asset worker" 
-                  :style="{ transform: `translate(-50%, -${(cell.data.level || 0) * 30}px)` }" />
+                  :style="{ transform: `translate(-50%, -${getWorkerTy(cell.data.level)}px)` }" />
              <img v-if="cell.data.worker === 'p2'" src="../../assets/santorini/worker_p2.png" class="asset worker" 
-                  :style="{ transform: `translate(-50%, -${(cell.data.level || 0) * 30}px)` }" />
+                  :style="{ transform: `translate(-50%, -${getWorkerTy(cell.data.level)}px)` }" />
              
              <!-- Ghost Worker (Movement Preview) -->
              <div v-if="step === 'build' && selectedMovePos.r === cell.r && selectedMovePos.c === cell.c" 
                   class="ghost-worker">
                   <img :src="getCurrentWorkerImage()" class="asset worker opacity-70" 
-                       :style="{ transform: `translate(-50%, -${(cell.data.level || 0) * 30}px)` }" />
+                       :style="{ transform: `translate(-50%, -${getWorkerTy(cell.data.level)}px)` }" />
              </div>
           </div>
         </div>
@@ -59,47 +79,35 @@
     </div>
     
     <!-- Game Info & Controls (Moved Below) -->
-    <div class="game-footer w-full max-w-3xl mt-4 px-4 flex flex-col gap-4">
+    <!-- Controls (Bottom) -->
+    <div class="controls w-full max-w-3xl mt-4 flex flex-col items-center gap-4">
         
-        <!-- Header Info Row -->
-        <div class="header flex justify-between items-center w-full glass-panel p-4">
-          <div>
-            <h2 class="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-yellow-400 to-orange-300">
-               Santorini
-            </h2>
-            <div class="text-sm text-gray-400">
-               ID: {{ $route.params.id }} | Turno: 
-               <span :class="currentTurn === 'p1' ? 'text-yellow-400 font-bold' : 'text-red-400 font-bold'">
-                 {{ currentTurnPlayerName }}
-               </span>
+        <!-- Action Prompts -->
+        <div class="glass-panel p-4 w-full text-center min-h-[80px] flex flex-col justify-center items-center">
+            <div v-if="myPlayerId && !isMyTurn" class="text-yellow-500 animate-pulse text-lg">
+               Esperando al oponente...
             </div>
-          </div>
-          
-          <div class="status text-xl font-mono">
-            {{ statusMessage }}
-          </div>
-    
-          <router-link to="/santoriniActive" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm transition">
-            Salir
-          </router-link>
+            <div v-else-if="step === 'select'" class="text-blue-300 text-lg">
+               Selecciona uno de tus trabajadores.
+            </div>
+            <div v-else-if="step === 'move'" class="text-green-300 text-lg flex items-center gap-4">
+               <span>Selecciona una casilla adyacente para <b>MOVER</b>.</span>
+               <button @click="resetSelection" class="btn-secondary text-sm">Cancelar</button>
+            </div>
+            <div v-else-if="step === 'build'" class="text-purple-300 text-lg flex items-center gap-4">
+               <span>Selecciona una casilla adyacente para <b>CONSTRUIR</b>.</span>
+               <button @click="resetSelection" class="btn-secondary text-sm">Cancelar</button>
+            </div>
+            <div v-else-if="step === 'place'" class="text-blue-300 text-lg">
+               <span>Selecciona una casilla vacía para <b>COLOCAR</b> tu trabajador.</span>
+            </div>
         </div>
 
-        <!-- Controls Message Row -->
-        <div class="controls glass-panel p-4 w-full text-center">
-           <div v-if="myPlayerId && !isMyTurn" class="text-yellow-500 animate-pulse">
-              Esperando al oponente...
-           </div>
-           <div v-if="step === 'select'" class="text-blue-300">
-              Selecciona uno de tus trabajadores.
-           </div>
-           <div v-if="step === 'move'" class="text-green-300">
-              Selecciona una casilla adyacente para MOVER.
-              <button @click="resetSelection" class="ml-4 text-xs bg-gray-600 px-2 py-1 rounded">Cancelar</button>
-           </div>
-           <div v-if="step === 'build'" class="text-purple-300">
-              Selecciona una casilla adyacente para CONSTRUIR.
-              <button @click="resetSelection" class="ml-4 text-xs bg-gray-600 px-2 py-1 rounded">Cancelar</button>
-           </div>
+        <!-- Meta Controls -->
+        <div class="w-full flex justify-center">
+             <router-link to="/games" class="btn-danger">
+                Salir del Juego
+             </router-link>
         </div>
     </div>
 
@@ -107,7 +115,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { API_BASE, WS_BASE } from '../../config'
 import p1WorkerImg from '../../assets/santorini/worker_p1.png'
@@ -182,7 +190,9 @@ const flatBoard = computed(() => {
             
             const leftPct = (coord.x / BOARD_WIDTH) * 100
             const topPct = (coord.y / BOARD_HEIGHT) * 100
-            const zIndex = r + c + 10 // Base Z-index
+            // Sort by depth: (4,0) is front, (0,4) is back.
+            // increasing r moves down (front), increasing c moves up (back).
+            const zIndex = (r - c) + 20 
 
             arr.push({ 
                 r, 
@@ -202,11 +212,29 @@ const flatBoard = computed(() => {
 
 // --- Logic ---
 
+// ... (previous code)
+
 function getCurrentWorkerImage() {
     return game.value.current_turn === 'p1' ? p1WorkerImg : p2WorkerImg
 }
 
+function getWorkerTy(level) {
+    if (!level) return 0;
+    // Tuned based on user feedback:
+    // L1: Lower slightly (was 30 -> 26)
+    // L2: Lower a bit more (was 60 -> 52)
+    // L3: Perfect (was 90 -> 90)
+    const map = {
+        0: 0,
+        1: 33, 
+        2: 60,
+        3: 98
+    }
+    return map[level] || (level * 30)
+}
+
 function isInteractive(r, c) {
+// ...
     if (!isMyTurn.value || game.value.status !== 'in_progress') return false
     
     // If selecting worker, only my workers are interactive
@@ -218,6 +246,8 @@ function isInteractive(r, c) {
     if (step.value === 'move') return canMoveTo(r, c)
     // If building, potential build spots
     if (step.value === 'build') return canBuildAt(r, c)
+    // If placing, empty spots
+    if (step.value === 'place') return canPlaceAt(r, c)
     
     return false
 }
@@ -269,6 +299,12 @@ function canBuildAt(r, c) {
     return true
 }
 
+function canPlaceAt(r, c) {
+    if (step.value !== 'place') return false
+    const cell = game.value.board[r][c]
+    return cell.worker === null && cell.level !== 4
+}
+
 function handleCellClick(r, c) {
     console.log(`Clicked cell [${r}, ${c}]`);
     console.log(`My Turn? ${isMyTurn.value}, Status: ${game.value?.status}, Step: ${step.value}`);
@@ -292,8 +328,16 @@ function handleCellClick(r, c) {
         }
     } else if (step.value === 'move') {
         if (canMoveTo(r, c)) {
-            selectedMovePos.value = { r, c }
-            step.value = 'build'
+            // Check if this move wins the game (Level 3)
+            const target = game.value.board[r][c]
+            if (target.level === 3) {
+                // Instant win move, no build needed
+                selectedMovePos.value = { r, c }
+                submitMove(null, null) 
+            } else {
+                selectedMovePos.value = { r, c }
+                step.value = 'build'
+            }
         } else if (game.value.board[r][c].worker === game.value.current_turn) {
             // Change selection
             selectedWorkerPos.value = { r, c }
@@ -302,6 +346,10 @@ function handleCellClick(r, c) {
     } else if (step.value === 'build') {
         if (canBuildAt(r, c)) {
             submitMove(r, c)
+        }
+    } else if (step.value === 'place') {
+        if (canPlaceAt(r, c)) {
+            submitPlacement(r, c)
         }
     }
 }
@@ -315,9 +363,10 @@ function resetSelection() {
 async function submitMove(buildR, buildC) {
     try {
         const payload = {
+            move_type: 'move_build',
             worker_start: [selectedWorkerPos.value.r, selectedWorkerPos.value.c],
             move_to: [selectedMovePos.value.r, selectedMovePos.value.c],
-            build_at: [buildR, buildC]
+            build_at: (buildR != null && buildC != null) ? [buildR, buildC] : null
         }
         
         await fetch(`${API_BASE}/santorini/${gameId}/move`, {
@@ -338,6 +387,61 @@ async function submitMove(buildR, buildC) {
     }
 }
 
+async function submitPlacement(r, c) {
+    try {
+        const payload = {
+            move_type: 'place_worker',
+            move_to: [r, c]
+        }
+        
+        await fetch(`${API_BASE}/santorini/${gameId}/move`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify(payload)
+        })
+        
+        // Wait for WS
+    } catch (e) {
+        console.error("Placement failed", e)
+        alert("Colocación inválida")
+    }
+}
+
+// Watch for turn changes to set step
+watch(game, (newGame) => {
+    if (!newGame) return
+    
+    if (isMyTurn.value) {
+        // Count my workers
+        let myWorkers = 0
+        newGame.board.forEach(row => {
+            row.forEach(cell => {
+                if (cell.worker === newGame.current_turn) myWorkers++
+            })
+        })
+        
+        if (myWorkers < 2) {
+            step.value = 'place'
+        } else {
+            // Only reset to select if we were in a non-active state or wrong state?
+            // Or just force select if it's my turn and I have workers.
+            // But if I am in middle of 'move' (from UI interaction), don't reset?
+            // Actually, if game state updates (e.g. from server), I should probably reset to Select unless I'm ignoring updates.
+            // But here, update comes from WS after MY move? Or opponent's move.
+            // If it's my turn now, it means opponent just moved. So I should start at 'select'.
+            if (step.value !== 'move' && step.value !== 'build') {
+                 step.value = 'select'
+            }
+        }
+    } else {
+        // Not my turn
+        step.value = 'select' // Reset logic
+    }
+}, { deep: true })
+
 // --- API & WS ---
 
 async function fetchGame() {
@@ -355,7 +459,14 @@ function connectWs() {
             // Update board and status
             game.value.board = JSON.parse(data.board)
             game.value.status = data.status
-            game.value.current_turn = (data.by === 'p1' ? 'p2' : 'p1') // 'by' is who MOVED, so turn is next
+            
+            // Use authoritative turn from server if available (Placement Phase support)
+            if (data.current_turn) {
+                game.value.current_turn = data.current_turn
+            } else {
+                // Fallback for legacy events (should not happen after update)
+                game.value.current_turn = (data.by === 'p1' ? 'p2' : 'p1') 
+            }
             
             // If game ended, turn might not switch conventionally, but status handles UI
              if (data.status.includes('won')) {
@@ -376,36 +487,43 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/* UI Panels */
 .glass-panel {
-  background: rgba(30, 41, 59, 0.8);
+  background: rgba(30, 41, 59, 0.85); /* Slightly darker/opaque */
   backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.3);
 }
 
 .santorini-game {
-  height: 100vh;
-  overflow: hidden;
+  min-height: 100vh;
+  /* Removed fixed height 100vh to allow scrolling on small screens if needed */
+  overflow-y: auto; 
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  background-color: #111827; /* gray-900 */
+  justify-content: flex-start; /* Top alignment */
+  background-color: #111827;
+  padding: 1rem;
 }
 
+/* Board Area */
 .game-area {
-  width: min(98vw, calc((100vh - 250px) * (2816 / 1536)));
-  max-width: none;
+  /* Dynamic sizing based on viewport */
+  width: min(95vw, 1200px); 
+  /* Maintain Aspect Ratio */
   aspect-ratio: 2816 / 1536;
-  height: auto;
   position: relative;
   user-select: none;
+  /* Add margin to separate from top/bottom */
+  margin: 10px 0; 
 }
 
 .board-bg {
   width: 100%;
   height: 100%;
-  object-fit: contain; /* Ensure image is not distorted */
+  object-fit: contain; 
   border-radius: 8px;
   box-shadow: 0 20px 50px rgba(0,0,0,0.5);
 }
@@ -416,77 +534,70 @@ onUnmounted(() => {
   left: 0;
   width: 100%;
   height: 100%;
-  pointer-events: none; /* Let clicks pass through if needed, but cells have pointer-events auto */
+  pointer-events: none;
 }
 
 .grid-cell {
   position: absolute;
   display: flex;
-  align-items: center; /* Generally center this div */
+  align-items: center; 
   justify-content: center;
-  width: 100px; /* Hitbox width */
-  height: 60px; /* Hitbox height */
-  transform: translate(-50%, -50%); /* Center on the coordinate */
-  pointer-events: auto; /* Enable clicks */
-  cursor: pointer; /* Show pointer by default on cells */
-  z-index: 100; /* Ensure it's above the board image */
+  /* Relative width/height to support scaling */
+  width: 7.8%; 
+  height: 8.6%; 
+  transform: translate(-50%, -50%); 
+  pointer-events: auto; 
+  cursor: pointer; 
+  z-index: 100; 
 }
-
-/* Remove pointer-events: none from markers/content if they need to be pass-through, 
-   but since grid-cell handles the click, we can keep them purely visual or leave as is.
-   We just need to make sure grid-cell is on top of board but maybe below floating UI? */
-
 
 .cell-marker {
   position: absolute;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -50%); /* Start centered */
-  width: 120px; /* Size of the marker ring, matching content width */
-  height: 70px; /* Perspective flattened */
+  transform: translate(-50%, -50%);
+  width: 120%; /* Relative to cell */
+  height: 120%; 
   pointer-events: none;
   border-radius: 50%;
   opacity: 0; 
   transition: all 0.2s ease;
-  z-index: 0; /* Behind content */
+  z-index: 0; 
 }
 
 .cell-content {
   position: absolute;
   bottom: 0;
   left: 50%;
-  /* This centers the content horizontally relative to the grid point */
   transform: translateX(-50%);
-  width: 120px; 
-  height: 120px;
-  pointer-events: none; /* Let clicks pass to grid-cell ?? No, we need clicks on cell */
-  /* Wait, grid-cell handles clicks. Content is visual. */
+  width: 120%; 
+  height: 200%; /* Allow height for vertical stack */
+  pointer-events: none;
   display: flex;
   justify-content: center;
-  align-items: flex-end; /* Stack from bottom up */
+  align-items: flex-end; 
 }
 
 .asset {
   position: absolute;
-  width: 100%; /* Relative to cell-content width */
+  width: 100%; 
   pointer-events: none;
   transition: transform 0.3s ease;
-  bottom: 0; /* Base assets at bottom of content box (which is the grid center point) */
+  bottom: 0; 
 }
 
 .asset.base-block { z-index: 1; }
-.asset.mid-block { z-index: 2; bottom: 25px; } 
-.asset.top-block { z-index: 3; bottom: 50px; }
-.asset.dome { z-index: 4; bottom: 75px; }
+.asset.mid-block { z-index: 2; } 
+.asset.top-block { z-index: 3; }
+.asset.dome { z-index: 4; }
 
 .asset.worker {
-  /* Adjusted positioning */
-  bottom: 8px; /* Slight offset from dead center to look grounded */
+  bottom: 8%; /* Relative offset */
   z-index: 10;
-  width: 100px; /* Fixed larger width */
+  width: 40%; 
   left: 50%; 
-  /* transform is applied inline for vertical lift, but we need origin */
   transform-origin: bottom center;
+  filter: drop-shadow(4px 4px 3px rgba(0,0,0,0.5));
 }
 
 /* Marker States */
@@ -494,7 +605,6 @@ onUnmounted(() => {
   opacity: 1;
   background: rgba(0, 255, 0, 0.4);
   box-shadow: inset 0 0 20px rgba(0, 255, 0, 0.6);
-  /* Use translate because it's absolute positioned centered */
   transform: translate(-50%, -50%) scale(1.0);
 }
 
@@ -520,5 +630,45 @@ onUnmounted(() => {
   opacity: 0.6;
   filter: grayscale(100%);
   z-index: 20; 
+}
+
+/* Buttons */
+.btn-danger {
+    background: rgba(220, 38, 38, 0.2);
+    color: #fca5a5;
+    border: 1px solid rgba(220, 38, 38, 0.4);
+    padding: 0.6rem 1.2rem;
+    border-radius: 8px;
+    font-weight: 600;
+    transition: all 0.2s;
+    text-decoration: none;
+    display: inline-block;
+}
+.btn-danger:hover {
+    background: rgba(220, 38, 38, 0.4);
+    color: #fff;
+    box-shadow: 0 0 10px rgba(220, 38, 38, 0.2);
+}
+
+.btn-secondary {
+    background: rgba(255, 255, 255, 0.05); /* Subtle background */
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.8);
+    border-radius: 20px; /* Rounded pill shape */
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    padding: 0.4rem 1rem; /* Adjust padding in CSS instead of utility if possible, but utility overrides. 
+                             Wait, utility is inline <button class="... py-1 px-3">. 
+                             We can remove utility classes in next step or just override here with !important if needed, 
+                             or rely on these being specific enough? Utility usually wins.
+                             I will update the HTML to remove utility classes or trust this looks good with them.
+                             Let's stick to the color/border change primarily here. */
+}
+.btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.5);
+    transform: translateY(-1px);
 }
 </style>

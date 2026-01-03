@@ -37,11 +37,133 @@ class SantoriniGameState(BaseModel):
     player_p2_name: Optional[str] = None
 
 class SantoriniMoveRequest(BaseModel):
-    worker_start: Tuple[int, int]
+    worker_start: Optional[Tuple[int, int]] = None
     move_to:      Tuple[int, int]
-    build_at:     Tuple[int, int]
+    build_at:     Optional[Tuple[int, int]] = None
+    move_type:    Literal["move_build", "place_worker"] = "move_build"
 
 # --- Routes ---
+
+async def _process_ai_turn(game: SantoriniGame, db: AsyncSession):
+    """
+    Checks if the current turn belongs to an AI player and processes the move if so.
+    """
+    if game.status != 'in_progress':
+        return
+
+    # Loop to handle consecutive AI turns
+    logger.info(f"Starting AI turn processing. Status: {game.status}, Turn: {game.current_turn}")
+    
+    while True:
+        is_p1_turn = (game.current_turn == 'p1')
+        p1_type = game.config.get('playerP1Type')
+        p2_type = game.config.get('playerP2Type')
+        
+        logger.info(f"Checking turn. P1Type: {p1_type}, P2Type: {p2_type}, Current: {game.current_turn}")
+        
+        is_ai_turn = (is_p1_turn and p1_type == 'ai') or ((not is_p1_turn) and p2_type == 'ai')
+        
+        if not is_ai_turn or game.status != 'in_progress':
+            logger.info("Not AI turn or game ended. Stopping loop.")
+            break
+        
+        # 1. Get AI Player
+        current_player_id = game.player_p1 if is_p1_turn else game.player_p2
+        # We need to fetch player from DB
+        player_res = await db.execute(select(Player).where(Player.id == current_player_id))
+        ai_player = player_res.scalar_one_or_none()
+        
+        if ai_player:
+            logger.info(f"AI Player found: {ai_player.name}")
+            from app.core.ai_base import get_ai
+            ai_agent = get_ai(ai_player.name)
+            
+            if ai_agent:
+                logger.info(f"AI Agent loaded: {ai_agent}")
+                # 2. Select Move
+                try:
+                    ai_move = ai_agent.select_move({
+                        "board": game.board,
+                        "current_turn": game.current_turn,
+                        "config": game.config
+                    })
+                    logger.info(f"AI selected move: {ai_move}")
+                except Exception as e:
+                    logger.error(f"Error selecting AI move: {e}")
+                    break
+                
+                if ai_move:
+                    # 3. Apply Move
+                    ai_mover = game.current_turn
+                    # Refresh logic because validation/application is static but we use game state
+                    try:
+                        new_board, status = SantoriniLogic.apply_move(game.board, ai_move, ai_mover)
+                        logger.info(f"Move applied. New status: {status}")
+                    except Exception as e:
+                        logger.error(f"Error applying AI move: {e}")
+                        break
+
+                    game.board = new_board
+                    game.status = status
+                    
+                    previous_ai_turn = ai_mover
+                    
+                    if game.status == 'in_progress':
+                        next_turn = 'p2' if game.current_turn == 'p1' else 'p1'
+                        
+                        # Check if we should switch turn (Placement Phase Logic for AI)
+                        if ai_move.get('move_type') == 'place_worker':
+                            # Check how many workers current player has
+                            worker_count = 0
+                            for r in range(5):
+                                for c in range(5):
+                                    if game.board[r][c]['worker'] == game.current_turn:
+                                        worker_count += 1
+                            
+                            logger.info(f"Placement phase. Worker count for {game.current_turn}: {worker_count}")
+                            
+                            # If < 2 workers, they need to place another one. Turn stays.
+                            if worker_count < 2:
+                                next_turn = game.current_turn
+
+                        if SantoriniLogic.check_loss(game.board, next_turn):
+                            game.status = f"{game.current_turn}_won"
+                        else:
+                            game.current_turn = next_turn
+                        
+                        logger.info(f"Next turn set to: {game.current_turn}")
+                            
+                    db.add(game)
+                    await db.commit()
+                    await db.refresh(game)
+                    
+                    # 4. Redis Event for AI
+                    try:
+                        await core_redis.redis_pool.xadd(
+                            f"santorini:{game.id}",
+                            {
+                                "type": "move",
+                                "move": json.dumps(ai_move),
+                                "by": previous_ai_turn,
+                                "board": json.dumps(game.board),
+                                "status": game.status,
+                                "current_turn": game.current_turn
+                            }
+                        )
+                    except Exception as e:
+                        logger.error(f"Failed to publish AI move event: {e}")
+                else:
+                    # AI returned no move? Stop loop to avoid infinite spin
+                    logger.warning("AI returned NO move. Breaking.")
+                    break
+            else:
+                 logger.error(f"AI Agent not found for name: {ai_player.name}")
+                 break
+        else:
+            logger.error("AI Player object not found in DB")
+            break
+
+
 
 @router.get("/", response_model=List[SantoriniGameState])
 async def list_games(db: AsyncSession = Depends(get_db)):
@@ -89,13 +211,11 @@ async def create_game(
     # Initial Worker Placement (Simplified: Fixed positions for MVP or Random?)
     # Rules say players place them. For this MVP, let's place them reasonably.
     # Initial Worker Placement
-    # P1: (0,0), (4,4)
-    # P2: (0,4), (4,0)
-    
-    board[0][0]['worker'] = 'p1'
-    board[4][4]['worker'] = 'p1'
-    board[0][4]['worker'] = 'p2'
-    board[4][0]['worker'] = 'p2'
+    # Removed automatic placement. Players must place them manually.
+    # board[0][0]['worker'] = 'p1'
+    # board[4][4]['worker'] = 'p1'
+    # board[0][4]['worker'] = 'p2'
+    # board[4][0]['worker'] = 'p2'
 
     new_game = SantoriniGame(
         board=board,
@@ -118,6 +238,9 @@ async def create_game(
         )
     except Exception as e:
         logger.error(f"Failed to publish create event to Redis: {e}")
+
+    # AI Turn Trigger
+    await _process_ai_turn(new_game, db)
 
     # Fetch names
     p1 = await db.get(Player, req.playerP1Id)
@@ -183,12 +306,21 @@ async def make_move(
     move_dict = {
         'worker_start': move.worker_start,
         'move_to': move.move_to,
-        'build_at': move.build_at
+        'build_at': move.build_at,
+        'move_type': move.move_type
     }
+    
+    # Clean up None values to match logic.py output format if needed, 
+    # OR ensure logic.py returns Nones. 
+    # logic.py currently does NOT return Nones for placement moves, it just omits keys.
+    # So we simply filter Nones from move_dict to match valid_moves format.
+    # move_dict = {k: v for k, v in move_dict.items() if v is not None}
     
     valid_moves = SantoriniLogic.get_valid_moves(game.board, game.current_turn)
     if move_dict not in valid_moves:
         # We can implement simpler comparison if dict eq fails, but it should work for POD types
+        # Debugging aid
+        # logger.error(f"Invalid move: {move_dict} not in {valid_moves}") 
         raise HTTPException(status_code=400, detail="Invalid move")
 
     # Apply Move
@@ -197,8 +329,25 @@ async def make_move(
     game.board = new_board
     game.status = status
     
+    previous_turn = game.current_turn
     if game.status == 'in_progress':
+        # Turn Logic
         next_turn = 'p2' if game.current_turn == 'p1' else 'p1'
+        
+        # Check if we should switch turn (Placement Phase Logic)
+        if move.move_type == 'place_worker':
+            # Check how many workers current player has
+            # We iterate board to count
+            worker_count = 0
+            for r in range(5):
+                for c in range(5):
+                    if game.board[r][c]['worker'] == game.current_turn:
+                        worker_count += 1
+            
+            # If < 2 workers, they need to place another one. Turn stays.
+            if worker_count < 2:
+                next_turn = game.current_turn
+
         # Check if next player has moves. If not, they lose -> current player wins.
         if SantoriniLogic.check_loss(game.board, next_turn):
             game.status = f"{game.current_turn}_won"
@@ -216,13 +365,19 @@ async def make_move(
             {
                 "type": "move",
                 "move": json.dumps(move_dict),
-                "by": game.current_turn, # Technically previous turn player made this move
+                "by": previous_turn, 
                 "board": json.dumps(game.board),
-                "status": game.status
+                "status": game.status,
+                "current_turn": game.current_turn
             }
         )
     except Exception as e:
         logger.error(f"Failed to publish move event: {e}")
+
+    # AI Turn Trigger
+    await _process_ai_turn(game, db)
+
+    # Return new state
 
     # Return new state
     p1_name = None

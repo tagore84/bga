@@ -121,14 +121,15 @@ async function deleteGame(gameId) {
 
 <style scoped>
 .games-container {
-  max-width: 1000px;
+  width: 100%;
+  max-width: 1600px;
   margin: 0 auto;
   padding: 2rem;
 }
 
 .games-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 1.5rem;
 }
 

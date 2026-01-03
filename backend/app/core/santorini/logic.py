@@ -23,21 +23,43 @@ class SantoriniLogic:
         """
         Returns list of valid moves.
         A move consists of:
-        - worker_pos: (r, c)
-        - move_to: (r, c)
-        - build_at: (r, c)
+        - move_type: 'move_build' or 'place_worker'
+        - worker_start: (r, c) (optional for placement)
+        - move_to: (r, c) (placement target)
+        - build_at: (r, c) (optional for placement)
         """
         moves = []
         workers = []
         
         # Find player workers
+        all_workers = []
         for r in range(5):
             for c in range(5):
-                if board[r][c]['worker'] == player:
-                    workers.append((r, c))
+                if board[r][c]['worker'] is not None:
+                    all_workers.append(board[r][c]['worker'])
+                    if board[r][c]['worker'] == player:
+                        workers.append((r, c))
 
-        # Can only move if game not over (checked outside/implied)
+        # Check for Placement Phase
+        # Total workers should be 4 (2 per player)
+        # If less than 4, and it's this player's turn (logic handled by caller/implied), then generating placement moves.
+        # But we need to know if it is indeed placement phase. 
+        # Actually simplest logic: if this player has < 2 workers, they can place.
+        
+        if len(workers) < 2:
+            # Generate placement moves
+            for r in range(5):
+                for c in range(5):
+                    if board[r][c]['worker'] is None:
+                        moves.append({
+                            'move_type': 'place_worker',
+                            'move_to': (r, c),
+                            'worker_start': None,
+                            'build_at': None
+                        })
+            return moves
 
+        # Normal Move Phase
         for wr, wc in workers:
             current_level = board[wr][wc]['level']
             
@@ -60,6 +82,16 @@ class SantoriniLogic:
                     # Max 1 level up, any level down
                     if target_cell['level'] > current_level + 1: continue
                     
+                    if target_cell['level'] == 3:
+                        # Winning move! No build needed.
+                        moves.append({
+                            'move_type': 'move_build',
+                            'worker_start': (wr, wc),
+                            'move_to': (nr, nc),
+                            'build_at': None # No build triggered
+                        })
+                        continue # Skip build check for this move path
+
                     # Valid move found. Now checks for build
                     # Simulate move temporarily
                     # But need to check if there is AT LEAST one valid build spot from new pos
@@ -99,6 +131,7 @@ class SantoriniLogic:
                     if possible_builds:
                         for br, bc in possible_builds:
                             moves.append({
+                                'move_type': 'move_build',
                                 'worker_start': (wr, wc),
                                 'move_to': (nr, nc),
                                 'build_at': (br, bc)
@@ -114,24 +147,50 @@ class SantoriniLogic:
         import copy
         new_board = copy.deepcopy(board)
         
-        wr, wc = move['worker_start']
-        nr, nc = move['move_to']
-        br, bc = move['build_at']
+        move_type = move.get('move_type', 'move_build')
         
-        # 1. Move
-        if new_board[wr][wc]['worker'] != player:
-            raise ValueError("Invalid worker ownership")
+        if move_type == 'place_worker':
+            nr, nc = move['move_to']
+            if new_board[nr][nc]['worker'] is not None:
+                raise ValueError("Cell occupied")
+            new_board[nr][nc]['worker'] = player
             
-        new_board[wr][wc]['worker'] = None
-        new_board[nr][nc]['worker'] = player
-        
-        # Check Win Condition: Moved to level 3
-        if new_board[nr][nc]['level'] == 3:
-            return new_board, f"{player}_won"
+            # Status check for placement
+            # If after this placement, the player has 2 workers? 
+            # Actually status is managed by the route mostly for turns, but we can return 'in_progress'
+            return new_board, "in_progress"
+
+        if move_type == 'move_build':
+            wr, wc = move['worker_start']
+            nr, nc = move['move_to']
+            if move['build_at'] is None:
+                br, bc = None, None
+            else:
+                br, bc = move['build_at']
             
-        # 2. Build
-        new_board[br][bc]['level'] += 1
-        
+            # 1. Move
+            if new_board[wr][wc]['worker'] != player:
+                raise ValueError("Invalid worker ownership")
+                
+            new_board[wr][wc]['worker'] = None
+            new_board[nr][nc]['worker'] = player
+            
+            # Check Win Condition: Moved to level 3
+            if new_board[nr][nc]['level'] == 3:
+                return new_board, f"{player}_won"
+                
+            # 2. Build
+            if br is not None and bc is not None:
+                new_board[br][bc]['level'] += 1
+            else:
+                 # This should only happen if we moved to level 3 (captured above) or if logic allows moves without build (not aiming for that except win)
+                 # But if we are here and didn't win, and have no build, it's weird unless we allow "optional build"?
+                 # Rules say build is mandatory. So we can raise error or check consistency.
+                 # Given new valid_moves logic, we only pass None if level==3.
+                 pass
+            
+            return new_board, "in_progress"
+            
         return new_board, "in_progress"
 
     @staticmethod

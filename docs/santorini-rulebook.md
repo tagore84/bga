@@ -104,7 +104,7 @@ Un jugador **pierde** si, al comenzar su turno:
 
 En la versión avanzada, cada jugador recibe una **carta de dios** que modifica las reglas básicas.
 
-> Esta variante no está incluida en este documento.
+> Toda la información de los dioses se encuentra en el archivo [santorini-gods.md](santorini-gods.md).
 
 ---
 
